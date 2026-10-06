@@ -18,13 +18,19 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+import { ReportProvider } from "@/lib/store/ReportContext";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ReportProvider>
+          {children}
+        </ReportProvider>
+      </body>
     </html>
   );
 }
