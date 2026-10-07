@@ -1,592 +1,298 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { 
-  Settings, Camera, Image as ImageIcon, MapPin, 
-  ArrowLeft, Bot, AlertTriangle, RefreshCcw, ExternalLink, Info,
-  MoreHorizontal, ChevronRight, CheckCircle, User, ShieldCheck,
-  History, Clock
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useReports, Report, LocationData, AnalysisData } from "@/lib/store/ReportContext";
-import { requestGeolocation, readPhotoMeta } from "@/lib/utils/camera";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { ArrowLeft, ArrowRight, Camera, Check, Copy, Download, Image as ImageIcon, Info, LoaderCircle, MapPin, RefreshCcw, Sparkles, Clock, AlertTriangle } from "lucide-react";
+import type { LocationData, AnalysisData } from "@/lib/store/ReportContext";
+import { readPhotoMeta, requestGeolocation } from "@/lib/utils/camera";
+import styles from "./home.module.css";
 
-type AiState = "idle" | "viewing" | "analyzing" | "result" | "error";
-type Screen = "login" | "home" | "chat" | "report" | "history";
+type Screen = "home" | "analysis" | "report";
+type Phase = "reading" | "location" | "analyzing" | "ready" | "error";
+const categories = ["Ổ gà, hư mặt đường", "Ngập nước", "Đèn đường hỏng", "Rác thải", "Khác / không nhận diện được"];
+const disclaimer = "SnapFix CT chỉ hỗ trợ chuẩn bị nội dung phản ánh. Việc gửi phản ánh được thực hiện tại kênh chính thức của cơ quan chức năng.";
+
+function locationLabel(location: LocationData) {
+  return location.text || (location.lat != null && location.lng != null ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "Chưa có vị trí");
+}
+
+function formatTime(value: string) {
+  return new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function draftFor(category: string, location: LocationData, time: string) {
+  return `Kính gửi cơ quan chức năng,\n\nTôi xin phản ánh sự cố ${category.toLowerCase()} tại ${locationLabel(location)}. Sự cố được ghi nhận lúc ${formatTime(time)} (giờ Việt Nam).\n\n[Mô tả thêm tình trạng thực tế và ảnh hưởng tại đây.]\n\nKính mong cơ quan chức năng kiểm tra và có phương án xử lý phù hợp.\n\nXin cảm ơn.`;
+}
+
+function vietnamTimeInput(value: string) {
+  return new Date(new Date(value).getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 16);
+}
 
 export default function SnapFixCT() {
-  const router = useRouter();
-  const { reports, addReport } = useReports();
-  
-  const [screen, setScreen] = useState<Screen>("login");
-  const [aiState, setAiState] = useState<AiState>("idle");
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [currentFile, setCurrentFile] = useState<File | null>(null);
-  
-  // Current draft report
+  const [screen, setScreen] = useState<Screen>("home");
+  const [phase, setPhase] = useState<Phase>("reading");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [source, setSource] = useState<"camera" | "library">("library");
   const [location, setLocation] = useState<LocationData>({ type: "manual", text: "" });
-  const [capturedAt, setCapturedAt] = useState<string>("");
+  const [time, setTime] = useState("");
+  const [timeFromExif, setTimeFromExif] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
-  const [draftText, setDraftText] = useState("");
+  const [draft, setDraft] = useState("");
   const [originalDraft, setOriginalDraft] = useState("");
-  
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [manualLocationInput, setManualLocationInput] = useState("");
-  const [showManualLocation, setShowManualLocation] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [locationInput, setLocationInput] = useState("");
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [editingTime, setEditingTime] = useState(false);
+  const [timeInput, setTimeInput] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const libraryInput = useRef<HTMLInputElement>(null);
+  const gpsRequest = useRef<ReturnType<typeof requestGeolocation> | null>(null);
+  const generation = useRef(0);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    if (screen === 'chat') {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [screen, aiState, showManualLocation]);
+    return () => { if (preview) URL.revokeObjectURL(preview); };
+  }, [preview]);
 
-  const mockAiAnalysis = async (file: File, loc: LocationData, time: string): Promise<AnalysisData> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    // Simulate AI parsing JSON
-    const mockJsonString = JSON.stringify({
-      category: "Ổ gà, hư mặt đường",
-      severity: "high",
-      reason: "Mặt đường bị hư hỏng, tạo thành ổ gà, có thể gây nguy hiểm cho phương tiện.",
-      confidence: 0.87,
-      draft: `Kính gửi cơ quan chức năng,\n\nTôi xin phản ánh tình trạng mặt đường bị hư hỏng, xuất hiện ổ gà tại ${loc.text || (loc.lat ? `tọa độ (${loc.lat.toFixed(4)}, ${loc.lng?.toFixed(4)})` : "khu vực này")}.\n\nTình trạng này gây khó khăn và nguy hiểm cho phương tiện lưu thông.\n\nKính mong cơ quan chức năng xem xét khắc phục.\n\nXin cảm ơn.`
-    });
-    
-    const parsed = JSON.parse(mockJsonString);
-    return parsed;
-  };
+  useEffect(() => {
+    heading.current?.focus();
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [screen]);
 
-  const processImage = async (file: File, forceGpsCoords?: {lat: number, lng: number}) => {
-    setCurrentFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    setScreen("chat");
-    setAiState("viewing");
-    
-    // Get Metadata (EXIF + File Time)
-    const meta = await readPhotoMeta(file);
-    let finalLocation = meta.location;
-    
-    // Override with active GPS if we got it before capturing
-    if (forceGpsCoords) {
-      finalLocation = { type: "gps", lat: forceGpsCoords.lat, lng: forceGpsCoords.lng, text: "Vị trí GPS hiện tại" };
-    }
+  useEffect(() => () => { generation.current += 1; }, []);
 
-    setLocation(finalLocation);
-    setCapturedAt(meta.capturedAt);
-
-    if (finalLocation.type === "manual" && !finalLocation.text) {
-       // Ask for manual location before AI
-       setShowManualLocation(true);
-       setAiState("idle");
-       return;
-    }
-    
-    await runAi(file, finalLocation, meta.capturedAt);
-  };
-  
-  const submitManualLocation = async () => {
-    if (!manualLocationInput.trim()) return;
-    const loc: LocationData = { type: "manual", text: manualLocationInput };
-    setLocation(loc);
-    setShowManualLocation(false);
-    setAiState("viewing");
-    if (currentFile) {
-        await runAi(currentFile, loc, capturedAt);
-    }
-  };
-
-  const runAi = async (file: File, loc: LocationData, time: string) => {
-    setAiState("analyzing");
-    try {
-      const result = await mockAiAnalysis(file, loc, time);
-      setAnalysis(result);
-      setDraftText(result.draft);
-      setOriginalDraft(result.draft);
-      setAiState("result");
-    } catch (error) {
-      setAiState("error");
-    }
-  };
-
-  const handleCameraCaptureClick = async () => {
-    // Try to get GPS first
-    const coords = await requestGeolocation();
-    
-    // Then open camera (handled by a temporary listener or just opening it and saving coords in state)
-    // For web input capture, we can't block easily, so we get GPS first then click input.
-    // In React, we trigger click after async might be blocked by popup blocker, but let's try.
-    
-    const input = cameraInputRef.current;
-    if (input) {
-      // Small trick to pass coords to the next onChange
-      (input as any)._gpsCoords = coords; 
-      input.click();
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const coords = (e.target as any)._gpsCoords;
-    if (file) {
-        await processImage(file, coords);
-    }
-    e.target.value = '';
-    (e.target as any)._gpsCoords = null;
-  };
-
-  const handleRetake = () => {
-    setImagePreview(null);
-    setCurrentFile(null);
-    setAnalysis(null);
-    setAiState("idle");
+  function reset() {
+    generation.current += 1;
     setScreen("home");
-  };
-
-  const getSeverityBadge = (severity: string) => {
-    if (severity === "high") return <span className="bg-[#FEE2E2] text-[#DC2626] px-2.5 py-1 rounded-full text-xs font-semibold">Cảnh báo cao</span>;
-    if (severity === "medium") return <span className="bg-[#FEF3C7] text-[#D97706] px-2.5 py-1 rounded-full text-xs font-semibold">Cảnh báo trung bình</span>;
-    return <span className="bg-[#DCFCE7] text-[#15803D] px-2.5 py-1 rounded-full text-xs font-semibold">Cảnh báo thấp</span>;
-  };
-
-  const handleSubmitReport = () => {
-    if (!analysis) return;
-    
-    const newReport: Report = {
-      id: `#SF${Date.now().toString().slice(-6)}`,
-      image: { file: currentFile, previewUrl: imagePreview },
-      location: location,
-      capturedAt: capturedAt,
-      analysis: analysis,
-      editedDraft: draftText,
-      receivingAgency: { name: "UBND Quận Ninh Kiều", reportUrl: "https://example.com" },
-      status: "Đã gửi", // Citizen status, will be mapped to "Cần xử lý" in admin
-      submittedAt: new Date().toISOString(),
-      logs: []
-    };
-    
-    addReport(newReport);
-    setShowSuccessPopup(true);
-  };
-
-  // ---------------------------------------------------------
-  // MÀN 0: LOGIN
-  // ---------------------------------------------------------
-  if (screen === "login") {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#F8FAFC] max-w-md mx-auto shadow-sm relative items-center justify-center p-6">
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-20 h-20 bg-[#E8F7EF] rounded-[20px] flex items-center justify-center mb-4">
-            <Camera className="w-10 h-10 text-[#0B8F4D]" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-center">
-            <span className="text-[#0B8F4D]">SnapFix</span>
-            <span className="text-[#111827] ml-1.5">CT</span>
-          </h1>
-          <p className="text-[#6B7280] text-[15px] mt-2 text-center">Nền tảng báo cáo sự cố hạ tầng đô thị</p>
-        </div>
-
-        <div className="w-full flex flex-col gap-4">
-          <button 
-            onClick={() => setScreen("home")}
-            className="bg-white border-2 border-[#0B8F4D] active:bg-[#E8F7EF] text-[#0B8F4D] py-4 rounded-[16px] text-[16px] font-bold w-full text-center flex items-center gap-3 px-5 transition-colors shadow-sm"
-          >
-            <User className="w-6 h-6" />
-            <div className="flex flex-col items-start text-left">
-              <span>Đăng nhập tư cách Người dân</span>
-              <span className="text-[12px] font-medium opacity-80">Gửi và theo dõi phản ánh</span>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => router.push("/officer")}
-            className="bg-[#111827] active:bg-gray-800 text-white py-4 rounded-[16px] text-[16px] font-bold w-full text-center flex items-center gap-3 px-5 transition-colors shadow-sm"
-          >
-            <ShieldCheck className="w-6 h-6" />
-            <div className="flex flex-col items-start text-left">
-              <span>Đăng nhập tư cách Cán bộ</span>
-              <span className="text-[12px] font-medium opacity-80">Tiếp nhận và xử lý sự cố</span>
-            </div>
-          </button>
-        </div>
-      </div>
-    );
+    setPreview(null);
+    setAnalysis(null);
+    setLocation({ type: "manual", text: "" });
+    setLocationInput("");
+    setEditingLocation(false);
+    setEditingTime(false);
+    setError("");
+    setNotice("");
+    setDraft("");
+    setOriginalDraft("");
   }
 
-  // ---------------------------------------------------------
-  // MÀN 1A: HOME
-  // ---------------------------------------------------------
-  if (screen === "home") {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#FFFFFF] max-w-md mx-auto shadow-sm relative">
-        <header className="flex justify-between items-center p-4 border-b border-[#E5E7EB]">
-          <div className="text-xl font-bold tracking-tight">
-            <span className="text-[#0B8F4D]">SnapFix</span>
-            <span className="text-[#111827] ml-1">CT</span>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setScreen("history")} className="p-2 text-[#6B7280] hover:bg-[#F8FAFC] rounded-full">
-              <History className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-[#6B7280] hover:bg-[#F8FAFC] rounded-full">
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
+  async function analyze(loc: LocationData, capturedAt: string, token = generation.current) {
+    setPhase("analyzing");
+    setError("");
+    try {
+      // Demo only: no image recognition service is configured yet.
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      if (token !== generation.current) return;
+      const category = categories[4];
+      const text = draftFor(category, loc, capturedAt);
+      setAnalysis({ category, severity: "low", reason: "Chưa có kết quả nhận diện thực tế. Hãy chọn loại sự cố và mức cảnh báo dựa trên những gì bạn quan sát được.", confidence: 0, draft: text });
+      setDraft(text);
+      setOriginalDraft(text);
+      setPhase("ready");
+    } catch {
+      if (token !== generation.current) return;
+      setPhase("error");
+      setError("Chưa thể phân tích ảnh. Vui lòng thử lại.");
+    }
+  }
 
-        <main className="flex-1 p-5 flex flex-col gap-6">
-          <div className="text-center mt-4">
-            <h1 className="text-2xl font-bold text-[#111827] leading-snug mb-3">
-              Chụp ảnh sự cố hạ tầng<br/>và nhận hỗ trợ từ AI
-            </h1>
-            <p className="text-[15px] text-[#6B7280] leading-relaxed px-4">
-              Chỉ cần một tấm ảnh, AI sẽ phân tích và soạn sẵn nội dung phản ánh giúp bạn.
-            </p>
-          </div>
+  function openCamera() {
+    // Keep the picker in the click gesture: awaiting GPS can block it on mobile.
+    gpsRequest.current = requestGeolocation();
+    cameraInput.current?.click();
+  }
 
-          <div className="bg-[#F8FAFC] rounded-2xl h-48 w-full flex items-center justify-center border border-[#E5E7EB] overflow-hidden">
-            <div className="text-[#6B7280] text-sm flex flex-col items-center gap-2 opacity-50">
-                <ImageIcon className="w-10 h-10" />
-                Ảnh minh họa đường phố
-            </div>
-          </div>
+  async function selectImage(event: ChangeEvent<HTMLInputElement>, imageSource: "camera" | "library") {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) {
+      setError("Vui lòng chọn một ảnh có dung lượng tối đa 20 MB.");
+      return;
+    }
+    const token = ++generation.current;
+    const capturedNow = new Date().toISOString();
+    const pendingGps = imageSource === "camera" ? gpsRequest.current : null;
+    setSource(imageSource);
+    setPreview(URL.createObjectURL(file));
+    setScreen("analysis");
+    setPhase("reading");
+    setAnalysis(null);
+    setEditingLocation(false);
+    setEditingTime(false);
+    setLocationInput("");
+    setError("");
+    setNotice("");
+    try {
+      const meta = await readPhotoMeta(file);
+      const coords = pendingGps ? await pendingGps : null;
+      if (token !== generation.current) return;
+      const loc: LocationData = coords ? { type: "gps", ...coords, text: "" } : meta.location;
+      const capturedAt = imageSource === "camera" ? capturedNow : meta.capturedAt;
+      setLocation(loc);
+      setTime(capturedAt);
+      setTimeFromExif(imageSource === "library" && meta.timeFromExif);
+      if (loc.type === "manual" && !loc.text) setPhase("location");
+      else await analyze(loc, capturedAt, token);
+    } catch {
+      if (token !== generation.current) return;
+      setPhase("error");
+      setError("Không đọc được ảnh này. Hãy chọn ảnh JPG, PNG hoặc chụp lại.");
+    }
+  }
 
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={handleCameraCaptureClick}
-              className="bg-[#0B8F4D] active:bg-[#08743E] text-white flex items-center justify-center gap-2 py-4 rounded-[16px] text-lg font-semibold transition-colors"
-            >
-              <Camera className="w-6 h-6" />
-              Chụp ảnh
-            </button>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-[#F8FAFC] active:bg-gray-100 text-[#111827] border border-[#E5E7EB] flex items-center justify-center gap-2 py-4 rounded-[16px] text-[17px] font-semibold transition-colors"
-            >
-              <ImageIcon className="w-5 h-5 text-[#0B8F4D]" />
-              Thư viện
-            </button>
-          </div>
+  function updateDetails(loc: LocationData, capturedAt: string, category = analysis?.category) {
+    if (!category || !analysis) return;
+    const text = draftFor(category, loc, capturedAt);
+    setOriginalDraft(text);
+    // Preserve writing already edited on the confirmation screen.
+    if (draft === originalDraft) setDraft(text);
+    else setNotice("Thông tin đã đổi. Hãy kiểm tra lại địa điểm và thời gian trong nội dung bạn đã sửa.");
+    setAnalysis({ ...analysis, category, draft: text });
+  }
 
-          <div className="bg-[#F8FAFC] rounded-[12px] p-3.5 flex gap-3 text-[#6B7280] text-[13px] leading-relaxed mt-auto">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>
-              SnapFix CT chỉ hỗ trợ chuẩn bị nội dung phản ánh. Việc gửi phản ánh sẽ được thực hiện tại trang chính thức của cơ quan chức năng.
-            </p>
+  function saveLocation() {
+    if (!locationInput.trim()) return;
+    const loc: LocationData = { type: "manual", text: locationInput.trim() };
+    setLocation(loc);
+    setEditingLocation(false);
+    if (phase === "location") void analyze(loc, time);
+    else updateDetails(loc, time);
+  }
+
+  async function copyDraft() {
+    try {
+      await navigator.clipboard.writeText(draft);
+      setNotice("Đã sao chép nội dung. Bạn có thể dán vào kênh tiếp nhận chính thức.");
+    } catch {
+      setNotice("Trình duyệt chưa cho phép sao chép. Bạn có thể chọn nội dung trong ô bên trên hoặc tải bản nháp.");
+    }
+  }
+
+  function downloadDraft() {
+    const url = URL.createObjectURL(new Blob([draft], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "SnapFix-CT-phan-anh.txt";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice("Đã tải bản nháp. Phản ánh chưa được gửi đến cơ quan chức năng.");
+  }
+
+  const busy = phase === "reading" || phase === "analyzing";
+  const locationEditor = (
+    <form className={styles.editor} onSubmit={event => { event.preventDefault(); saveLocation(); }}>
+      <label htmlFor="incident-location">{phase === "location" ? "Bạn chụp ở đâu?" : "Nơi xảy ra sự cố"}</label>
+      <p>Ghi số nhà, tên đường hoặc địa điểm gần đó để dễ tìm đúng nơi.</p>
+      <input id="incident-location" autoFocus required maxLength={300} value={locationInput} onChange={event => setLocationInput(event.target.value)} placeholder="Ví dụ: trước số 12 đường Nguyễn Văn Cừ…" />
+      <div className={styles.row}>
+        {editingLocation && <button type="button" className={styles.textButton} onClick={() => setEditingLocation(false)}>Hủy</button>}
+        <button className={styles.primary} disabled={!locationInput.trim()}><Check size={18} /> Xác nhận vị trí</button>
+      </div>
+    </form>
+  );
+
+  return (
+    <div className={styles.shell}>
+      <header className={styles.header}>
+        {screen !== "home" && <button className={styles.iconButton} aria-label={screen === "report" ? "Quay lại kết quả" : "Về trang chủ"} onClick={() => { setScreen(screen === "report" ? "analysis" : "home"); setNotice(""); }}><ArrowLeft size={22} /></button>}
+        <div className={styles.brand}><span>SnapFix</span> CT<span className={styles.brandDot}>.</span></div>
+        <span className={styles.headerNote}>Một tấm ảnh, một thay đổi</span>
+      </header>
+
+      {screen === "home" ? (
+        <main className={styles.home}>
+          <div className={styles.intro}>
+            <span className={styles.eyebrow}>CÙNG CHĂM SÓC THÀNH PHỐ</span>
+            <h1 ref={heading} tabIndex={-1}>Chụp ảnh sự cố hạ tầng<br />và nhận hỗ trợ từ AI</h1>
+            <p>Bắt đầu bằng một tấm ảnh.<br />SnapFix giúp bạn chuẩn bị nội dung phản ánh.</p>
           </div>
+          <div className={styles.illustration} aria-hidden="true">
+            <svg viewBox="0 0 480 200" fill="none">
+              <circle cx="355" cy="40" r="21" fill="#F0DB9D" />
+              <path d="M0 144h480v56H0z" fill="#E3EDE6" />
+              <path d="M0 166h480v34H0z" fill="#CADBD0" />
+              <path d="M25 183h70m35 0h70m35 0h70m35 0h70" stroke="white" strokeWidth="3" strokeDasharray="18 12" />
+              <path d="M75 145V57h66v88M88 57V41h40v16" fill="#DBE9DE" stroke="#96B9A2" strokeWidth="2" />
+              <path d="M87 74h12m18 0h12M87 93h12m18 0h12M87 112h12m18 0h12" stroke="#96B9A2" strokeWidth="5" />
+              <path d="M160 145V86l35-26 35 26v59" fill="#F8FAF5" stroke="#96B9A2" strokeWidth="2" />
+              <path d="M186 145v-29h18v29M174 91h13m14 0h13" stroke="#96B9A2" strokeWidth="3" />
+              <path d="M359 144V86m0 21-19-15m19 28 15-12" stroke="#789F87" strokeWidth="4" strokeLinecap="round" />
+              <path d="M337 91c-24-5-19-35 2-36-2-27 38-31 44-6 24-1 29 34 5 42-14 11-38 11-51 0Z" fill="#B4D2BB" />
+              <path d="M294 143V62q0-13 13-13h17" stroke="#789F87" strokeWidth="3" />
+              <path d="M314 50h16" stroke="#789F87" strokeWidth="7" strokeLinecap="round" />
+              <ellipse cx="264" cy="166" rx="19" ry="5" fill="#97AD9F" />
+              <rect x="238" y="74" width="46" height="53" rx="15" fill="#008E53" />
+              <path d="m254 126 7 9 7-9" fill="#008E53" />
+              <rect x="247" y="88" width="28" height="20" rx="5" stroke="white" strokeWidth="2" />
+              <circle cx="261" cy="98" r="5" stroke="white" strokeWidth="2" />
+              <path d="m254 88 3-4h8l3 4" stroke="white" strokeWidth="2" />
+            </svg>
+            <span>Ghi nhận điều cần được quan tâm</span>
+          </div>
+          <div className={styles.actions}>
+            <button className={styles.primary} onClick={openCamera}><Camera size={24} /> Chụp ảnh</button>
+            <button className={styles.secondary} onClick={() => libraryInput.current?.click()}><ImageIcon size={23} /> Tải ảnh lên <span className={styles.buttonHint}>Từ thư viện</span></button>
+          </div>
+          <p className={styles.photoHint}>Chụp rõ sự cố và một phần khung cảnh xung quanh.</p>
+          {error && <p className={styles.warning} role="alert">{error}</p>}
+          <div className={styles.locationHint}><MapPin size={18} /><span>Vị trí sẽ được xác nhận sau khi bạn chọn ảnh.</span></div>
+          <p className={styles.disclaimer}><Info size={18} /><span>{disclaimer}</span></p>
         </main>
-        
-        <input type="file" accept="image/*" capture="environment" className="hidden" ref={cameraInputRef} onChange={handleFileChange} />
-        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------
-  // MÀN LỊCH SỬ (HISTORY)
-  // ---------------------------------------------------------
-  if (screen === "history") {
-    // Get user's submitted reports
-    const myReports = reports.filter(r => r.status === "Đã gửi" || r.status === "Cần xử lý" || r.status === "Đang xử lý" || r.status === "Đã xử lý");
-
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#F8FAFC] max-w-md mx-auto relative shadow-sm">
-        <header className="flex items-center gap-3 p-4 border-b border-[#E5E7EB] bg-white sticky top-0 z-10">
-          <button onClick={() => setScreen("home")} className="p-1 -ml-1 text-[#111827]">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div className="text-[17px] font-bold text-[#111827]">
-            Lịch sử phản ánh
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-          {myReports.length === 0 ? (
-            <p className="text-center text-gray-500 mt-10">Chưa có phản ánh nào.</p>
-          ) : (
-            myReports.map(r => (
-              <div key={r.id} className="bg-white border border-[#E5E7EB] rounded-[16px] p-4 shadow-sm flex flex-col gap-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold text-[#111827]">{r.analysis?.category || "Sự cố"}</h4>
-                    <p className="text-xs text-gray-500 mt-1">{r.id}</p>
-                  </div>
-                  <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold ${r.status === 'Đã xử lý' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {r.status === "Đã gửi" || r.status === "Cần xử lý" ? "Đã tiếp nhận" : r.status}
-                  </span>
-                </div>
-                <div className="flex gap-2 items-start text-xs text-gray-600">
-                  <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <p className="line-clamp-2">{r.location.text || (r.location.lat ? `${r.location.lat.toFixed(4)}, ${r.location.lng?.toFixed(4)}` : "Không rõ")}</p>
-                </div>
-                <div className="flex gap-2 items-start text-xs text-gray-600">
-                  <Clock className="w-3.5 h-3.5 shrink-0" />
-                  <p>{new Date(r.submittedAt || Date.now()).toLocaleString('vi-VN')}</p>
-                </div>
+      ) : (
+        <main className={styles.flow}>
+          <div className={styles.step}><span>01 · Ảnh & thông tin</span><ArrowRight size={14} /><span data-active={screen === "report"}>02 · Soạn phản ánh</span></div>
+          <h1 ref={heading} tabIndex={-1}>{screen === "analysis" ? "Cùng xem ảnh của bạn" : "Kiểm tra nội dung phản ánh"}</h1>
+          {screen === "analysis" ? (
+            <>
+              <div className={styles.photoMessage}>
+                {/* Local object URLs are temporary user-selected images. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {preview && <img src={preview} alt="Ảnh sự cố bạn đã chọn" onError={() => { generation.current += 1; setPhase("error"); setError("Trình duyệt không hiển thị được ảnh này. Hãy chọn ảnh JPG hoặc PNG."); }} />}
+                <span>{source === "camera" ? "Ảnh vừa chụp của bạn" : "Ảnh bạn chọn từ thư viện"}</span>
               </div>
-            ))
+              <div className={styles.assistantLabel}><Sparkles size={18} /> Trợ lý SnapFix <span>Bản demo</span></div>
+              <div aria-live="polite">
+                {busy && <div className={styles.loading}><LoaderCircle className={styles.spinner} size={22} /><div><strong>{phase === "reading" ? "Đang xem ảnh của bạn…" : "Đang chuẩn bị kết quả minh họa…"}</strong><p>{phase === "reading" ? "Kiểm tra thông tin vị trí và thời gian trong ảnh." : "AI chưa được kết nối. Bạn sẽ tự xác nhận thông tin sự cố."}</p></div></div>}
+                {phase === "location" && locationEditor}
+                {phase === "error" && <div className={styles.warning} role="alert"><p>{error}</p><button className={styles.secondary} onClick={reset}>Chọn ảnh khác</button></div>}
+              </div>
+              {phase === "ready" && analysis && <section className={styles.card}>
+                <div className={styles.cardHeading}><h2>Thông tin sự cố</h2><span className={styles.demoTag}>Cần xác nhận</span></div>
+                <p className={styles.warning}><AlertTriangle size={18} /><span>AI chưa được kết nối nên chưa thể nhận diện ảnh hoặc đánh giá mức độ. Bạn hãy kiểm tra các thông tin bên dưới.</span></p>
+                <label className={styles.field}>Loại sự cố<select value={analysis.category} onChange={event => updateDetails(location, time, event.target.value)}>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
+                <label className={styles.field}>Mức cảnh báo bạn ghi nhận<select value={analysis.severity} onChange={event => setAnalysis({ ...analysis, severity: event.target.value as AnalysisData["severity"] })}><option value="low">Thấp</option><option value="medium">Trung bình</option><option value="high">Cao</option></select></label>
+                <div className={styles.detail}><Sparkles size={18} /><div><strong>Độ tin cậy AI: chưa có</strong><p>{analysis.reason}</p></div></div>
+                <div className={styles.detail}><MapPin size={18} /><div><strong>{locationLabel(location)}</strong><p>{location.type === "exif" ? "Vị trí lấy từ ảnh" : location.type === "gps" ? "GPS thiết bị khi chụp ảnh" : "Vị trí do bạn cung cấp"}</p><button className={styles.textButton} onClick={() => { setLocationInput(locationLabel(location)); setEditingLocation(true); }}>Bấm để sửa vị trí</button></div></div>
+                {editingLocation && locationEditor}
+                <div className={styles.detail}><Clock size={18} /><div><strong>{formatTime(time)}</strong><p>{source === "camera" ? "Thời điểm chụp ảnh" : timeFromExif ? "Thời gian lấy từ ảnh" : "Giờ của tệp ảnh; có thể khác giờ chụp"} · Giờ Việt Nam</p><button className={styles.textButton} onClick={() => { setTimeInput(vietnamTimeInput(time)); setEditingTime(true); }}>Bấm để sửa thời gian</button></div></div>
+                {editingTime && <form className={styles.editor} onSubmit={event => { event.preventDefault(); const value = new Date(`${timeInput}:00+07:00`); if (!Number.isFinite(value.getTime())) return; const nextTime = value.toISOString(); setTime(nextTime); updateDetails(location, nextTime); setEditingTime(false); }}><label htmlFor="capture-time">Thời gian chụp (giờ Việt Nam)</label><input id="capture-time" type="datetime-local" required value={timeInput} onChange={event => setTimeInput(event.target.value)} /><div className={styles.row}><button type="button" className={styles.textButton} onClick={() => setEditingTime(false)}>Hủy</button><button className={styles.primary}>Lưu thời gian</button></div></form>}
+                <button className={styles.primary} disabled={editingLocation || editingTime} onClick={() => setScreen("report")}>Tiếp tục soạn phản ánh <ArrowRight size={19} /></button>
+                <button className={styles.secondary} onClick={reset}><RefreshCcw size={18} /> Chụp lại / chọn ảnh khác</button>
+              </section>}
+            </>
+          ) : analysis && (
+            <>
+              <section className={styles.summary}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {preview && <img src={preview} alt="Ảnh sự cố đang soạn phản ánh" />}
+                <div><h2>{analysis.category}</h2><p>{locationLabel(location)}</p><p>{formatTime(time)}</p><button className={styles.textButton} onClick={() => setScreen("analysis")}>Sửa thông tin</button></div>
+              </section>
+              <section className={styles.card}>
+                <div className={styles.cardHeading}><label htmlFor="report-draft">Nội dung phản ánh</label><button className={styles.textButton} onClick={() => { setDraft(originalDraft); setNotice("Đã khôi phục bản nháp theo thông tin hiện tại."); }}><RefreshCcw size={15} /> Khôi phục</button></div>
+                <p className={styles.muted}>Đây là bản nháp mẫu. Hãy bổ sung tình trạng thực tế trước khi gửi.</p>
+                <textarea id="report-draft" rows={13} value={draft} onChange={event => setDraft(event.target.value)} />
+              </section>
+              <section className={styles.card}><h2>Kênh tiếp nhận</h2><p className={styles.muted}>Chưa cấu hình đường dẫn tiếp nhận chính thức cho sự cố này. Bạn có thể sao chép hoặc tải nội dung để gửi qua kênh của địa phương.</p></section>
+              <p className={styles.disclaimer}><Info size={18} /><span>{disclaimer}</span></p>
+              <div className={styles.actions}><button className={styles.primary} disabled={!draft.trim()} onClick={copyDraft}><Copy size={19} /> Sao chép nội dung</button><button className={styles.secondary} disabled={!draft.trim()} onClick={downloadDraft}><Download size={19} /> Tải bản nháp</button><button className={styles.textButton} onClick={() => setScreen("analysis")}><ArrowLeft size={17} /> Quay lại kết quả</button></div>
+            </>
           )}
+          {notice && <p className={styles.notice} role="status">{notice}</p>}
         </main>
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------
-  // MÀN 1B & 1C: CHAT
-  // ---------------------------------------------------------
-  if (screen === "chat") {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#F8FAFC] max-w-md mx-auto relative shadow-sm">
-        <header className="flex justify-between items-center p-4 border-b border-[#E5E7EB] bg-white sticky top-0 z-10">
-          <button onClick={() => setScreen("home")} className="p-1 -ml-1 text-[#111827]">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div className="text-lg font-bold tracking-tight">
-            <span className="text-[#0B8F4D]">SnapFix</span>
-            <span className="text-[#111827] ml-1">CT</span>
-          </div>
-          <button className="p-1 text-[#6B7280]">
-            <Settings className="w-5 h-5" />
-          </button>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 pb-24">
-          
-          <div className="flex flex-col items-end gap-1">
-            <div className="bg-[#E8F7EF] border border-[#bce2c7] rounded-2xl rounded-tr-sm p-2 max-w-[85%] shadow-sm">
-              {imagePreview && <img src={imagePreview} alt="Sự cố" className="w-full h-auto max-h-48 object-cover rounded-xl mb-2" />}
-              <p className="text-[15px] text-[#111827] px-1 pb-1">Đây là ảnh mình vừa chụp.</p>
-            </div>
-          </div>
-
-          {(showManualLocation || aiState !== "idle") && (
-            <div className="flex items-end gap-2 max-w-[85%]">
-              <div className="w-8 h-8 rounded-full bg-[#0B8F4D] flex items-center justify-center shrink-0 mb-1">
-                <Bot className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex flex-col gap-2">
-                
-                {showManualLocation && (
-                   <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tl-sm p-4 text-[15px] text-[#111827] shadow-sm flex flex-col gap-3">
-                     <p>Ảnh không có vị trí GPS. Bạn chụp ở đâu?</p>
-                     <input 
-                       type="text" 
-                       placeholder="Số nhà, tên đường..." 
-                       value={manualLocationInput}
-                       onChange={e => setManualLocationInput(e.target.value)}
-                       className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-[#0B8F4D]"
-                     />
-                     <button onClick={submitManualLocation} className="bg-[#0B8F4D] text-white px-4 py-2 rounded-lg text-sm font-bold self-end">Xác nhận</button>
-                   </div>
-                )}
-
-                {aiState === "viewing" && (
-                  <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tl-sm px-4 py-2.5 text-[15px] text-[#111827] shadow-sm">
-                    Đang xem ảnh của bạn...
-                  </div>
-                )}
-
-                {aiState === "analyzing" && (
-                  <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tl-sm px-4 py-2.5 text-[15px] text-[#111827] shadow-sm flex items-center gap-2">
-                    Đang phân tích sự cố
-                    <MoreHorizontal className="w-5 h-5 text-[#6B7280] animate-pulse" />
-                  </div>
-                )}
-
-                {aiState === "error" && (
-                  <div className="bg-white border border-red-200 rounded-2xl rounded-tl-sm p-4 text-[15px] text-[#111827] shadow-sm">
-                    <p>Phân tích ảnh thất bại. Vui lòng thử lại.</p>
-                    <button onClick={() => {if(currentFile) runAi(currentFile, location, capturedAt)}} className="mt-2 text-[#0B8F4D] font-bold">Thử lại</button>
-                  </div>
-                )}
-
-                {aiState === "result" && analysis && (
-                  <>
-                    <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tl-sm px-4 py-2.5 text-[15px] text-[#111827] shadow-sm">
-                      Đây là kết quả phân tích của bạn:
-                    </div>
-                    
-                    <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-sm w-[280px] sm:w-[320px] flex flex-col gap-4 mt-1">
-                      {imagePreview && <img src={imagePreview} alt="Kết quả phân tích" className="w-full h-32 object-cover rounded-[10px]" />}
-                      
-                      <div>
-                        <h3 className="text-[17px] font-bold text-[#111827] mb-1.5">{analysis.category}</h3>
-                        {getSeverityBadge(analysis.severity)}
-                      </div>
-
-                      <div>
-                        <p className="text-[13px] font-semibold text-[#6B7280] mb-1">Lý do đánh giá</p>
-                        <p className="text-[14px] text-[#111827] leading-relaxed">{analysis.reason}</p>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between items-center text-[13px] font-semibold text-[#6B7280] mb-1">
-                          <span>Độ tin cậy</span>
-                          <span className="text-[#0B8F4D]">{analysis.confidence}</span>
-                        </div>
-                        <div className="w-full bg-[#E5E7EB] rounded-full h-2">
-                          <div className="bg-[#0B8F4D] h-2 rounded-full" style={{ width: `${analysis.confidence * 100}%` }}></div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-[20px_1fr] gap-2 items-start mt-1">
-                        <MapPin className="w-4 h-4 text-[#6B7280] mt-0.5" />
-                        <div>
-                          <p className="text-[13px] font-semibold text-[#6B7280]">Vị trí</p>
-                          <p className="text-[14px] text-[#111827]">{location.text || (location.lat ? `${location.lat.toFixed(4)}, ${location.lng?.toFixed(4)}` : "Không rõ")}</p>
-                          <button className="text-[#0B8F4D] text-xs font-semibold mt-0.5">Bấm để sửa</button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-[20px_1fr] gap-2 items-start mt-1">
-                        <div className="w-4 h-4 text-[#6B7280] mt-0.5 flex items-center justify-center">🗓</div>
-                        <div>
-                          <p className="text-[13px] font-semibold text-[#6B7280]">Thời gian chụp</p>
-                          <p className="text-[14px] text-[#111827]">{new Date(capturedAt).toLocaleString('vi-VN')}</p>
-                          <button className="text-[#0B8F4D] text-xs font-semibold mt-0.5">Bấm để sửa</button>
-                        </div>
-                      </div>
-                      
-                      {analysis.confidence < 0.6 && (
-                        <div className="bg-[#FEF3C7] text-[#D97706] p-3 rounded-[10px] text-[13px] flex items-start gap-2 mt-2">
-                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                          <p>⚠ AI chưa chắc chắn. Bạn nên chụp lại hoặc kiểm tra loại sự cố.</p>
-                        </div>
-                      )}
-
-                      <div className="flex flex-col gap-2 mt-2">
-                        <button 
-                          onClick={() => setScreen("report")}
-                          className="bg-[#0B8F4D] text-white py-3 rounded-[12px] text-[15px] font-semibold w-full text-center"
-                        >
-                          Tiếp tục soạn phản ánh →
-                        </button>
-                        <button 
-                          onClick={handleRetake}
-                          className="bg-[#F8FAFC] text-[#111827] border border-[#E5E7EB] py-3 rounded-[12px] text-[15px] font-semibold w-full text-center"
-                        >
-                          Chụp lại
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          
-          <div ref={chatEndRef} />
-        </main>
-
-        <footer className="bg-white border-t border-[#E5E7EB] p-3 fixed bottom-0 left-0 right-0 max-w-md mx-auto">
-          <div className="bg-[#F8FAFC] border border-[#E5E7EB] rounded-full px-4 py-3 flex items-center gap-3">
-            <button disabled className="opacity-50"><ImageIcon className="w-5 h-5 text-[#6B7280]" /></button>
-            <button disabled className="opacity-50"><Camera className="w-5 h-5 text-[#6B7280]" /></button>
-            <div className="flex-1 text-[14px] text-[#9CA3AF] px-2 truncate">
-              Bạn có thể chụp ảnh hoặc chọn...
-            </div>
-          </div>
-        </footer>
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------
-  // MÀN 2: REPORT
-  // ---------------------------------------------------------
-  if (screen === "report" && analysis) {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#F8FAFC] max-w-md mx-auto shadow-sm relative">
-        <header className="flex items-center gap-3 p-4 border-b border-[#E5E7EB] bg-white sticky top-0 z-10">
-          <button onClick={() => setScreen("chat")} className="p-1 -ml-1 text-[#111827]">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div className="text-[17px] font-bold text-[#111827]">Xác nhận và gửi phản ánh</div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 pb-8">
-          <div className="bg-white border border-[#E5E7EB] rounded-[16px] p-3 flex gap-4 items-center shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
-            {imagePreview ? (
-                <img src={imagePreview} alt="Thumbnail" className="w-20 h-20 object-cover rounded-[10px] bg-gray-100" />
-            ) : <div className="w-20 h-20 bg-gray-100 rounded-[10px]"></div>}
-            <div className="flex-1 min-w-0">
-              <h4 className="text-[15px] font-bold text-[#111827] truncate mb-1">{analysis.category}</h4>
-              <div className="mb-2">{getSeverityBadge(analysis.severity)}</div>
-              <p className="text-[12px] text-[#6B7280] truncate">{location.text || "Có tọa độ"}</p>
-              <p className="text-[12px] text-[#6B7280]">{new Date(capturedAt).toLocaleString('vi-VN')}</p>
-            </div>
-            <button className="text-[#0B8F4D] text-sm font-semibold shrink-0">Sửa</button>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center px-1">
-              <h3 className="text-[15px] font-bold text-[#111827]">Nội dung phản ánh</h3>
-              <button onClick={() => setDraftText(originalDraft)} className="text-[#0B8F4D] text-[13px] font-semibold flex items-center gap-1">
-                <RefreshCcw className="w-3.5 h-3.5" /> Khôi phục bản gốc
-              </button>
-            </div>
-            <textarea 
-              value={draftText}
-              onChange={(e) => setDraftText(e.target.value)}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[16px] p-4 text-[15px] text-[#111827] leading-relaxed shadow-sm min-h-[220px] focus:outline-none focus:ring-2 focus:ring-[#0B8F4D]/20 focus:border-[#0B8F4D] resize-none"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <h3 className="text-[15px] font-bold text-[#111827] px-1">Cơ quan tiếp nhận phù hợp</h3>
-            <div className="bg-white border border-[#E5E7EB] rounded-[16px] p-4 flex gap-3 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
-              <div className="text-xl mt-0.5">🏛</div>
-              <div className="flex-1">
-                <h4 className="text-[15px] font-bold text-[#111827] mb-1">UBND Quận Ninh Kiều</h4>
-                <p className="text-[13px] text-[#6B7280] leading-relaxed">Tiếp nhận các phản ánh về hạ tầng giao thông trên địa bàn quận Ninh Kiều.</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-[#9CA3AF] self-center" />
-            </div>
-          </div>
-
-          <div className="bg-[#E5E7EB]/40 rounded-[12px] p-4 flex gap-3 text-[#6B7280] text-[13px] leading-relaxed">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>SnapFix CT chỉ chuẩn bị nội dung phản ánh. Việc gửi phản ánh sẽ được thực hiện tại trang chính thức của cơ quan chức năng.</p>
-          </div>
-        </main>
-
-        <footer className="bg-white border-t border-[#E5E7EB] p-4 sticky bottom-0 z-10">
-          <div className="flex flex-col gap-3">
-            <button onClick={handleSubmitReport} className="bg-[#0B8F4D] active:bg-[#08743E] text-white py-3.5 rounded-[16px] text-[16px] font-semibold w-full flex justify-center items-center gap-2">
-              Gửi phản ánh <ExternalLink className="w-4 h-4" />
-            </button>
-            <button onClick={() => setScreen("chat")} className="bg-[#F8FAFC] text-[#111827] border border-[#E5E7EB] py-3.5 rounded-[16px] text-[16px] font-semibold w-full">
-              Quay lại
-            </button>
-          </div>
-        </footer>
-
-        {showSuccessPopup && (
-          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5 backdrop-blur-sm transition-opacity">
-            <div className="bg-white rounded-[24px] p-6 max-w-[320px] w-full flex flex-col items-center text-center shadow-xl animate-in fade-in zoom-in-95 duration-200">
-              <div className="w-16 h-16 bg-[#DCFCE7] rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="w-8 h-8 text-[#15803D]" />
-              </div>
-              <h3 className="text-[19px] font-bold text-[#111827] mb-2">Gửi thành công!</h3>
-              <p className="text-[14px] text-[#6B7280] mb-6 leading-relaxed">Nội dung phản ánh của bạn đã được lưu vào hệ thống.</p>
-              <button 
-                onClick={() => {
-                  setShowSuccessPopup(false);
-                  handleRetake(); // Reset everything
-                }}
-                className="bg-[#0B8F4D] active:bg-[#08743E] text-white py-3.5 rounded-[16px] text-[16px] font-semibold w-full transition-colors"
-              >
-                Về trang chủ
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return null;
+      )}
+      <input aria-label="Chụp ảnh bằng camera" type="file" accept="image/*" capture="environment" hidden ref={cameraInput} onChange={event => void selectImage(event, "camera")} />
+      <input aria-label="Chọn ảnh từ thư viện" type="file" accept="image/*" hidden ref={libraryInput} onChange={event => void selectImage(event, "library")} />
+    </div>
+  );
 }
