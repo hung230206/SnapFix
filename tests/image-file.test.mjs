@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { prepareImageFile, imageDisplayError, MAX_IMAGE_BYTES } from "../src/lib/utils/image-file.ts";
+import { prepareImageFile, imageDisplayError, isHeicFile, toDisplayable, MAX_IMAGE_BYTES } from "../src/lib/utils/image-file.ts";
 
 for (const type of ["", "application/octet-stream", "image/jpeg"]) {
   test(`accepts a 1.6 MB JPEG with MIME ${type || '(missing)'}`, async () => {
@@ -32,4 +32,17 @@ test("recognizes HEIC without MIME and explains unsupported rendering separately
   const file = await prepareImageFile(new File([bytes], "phone-photo"));
   assert.equal(file.type, "image/heic");
   assert.match(imageDisplayError(file.type), /HEIC\/HEIF.*không phải lỗi dung lượng/);
+});
+
+test("detects HEIF by extension when MIME is absent", async () => {
+  const file = new File(["unknown container"], "phone.HEIF");
+  assert.equal(isHeicFile(file), true);
+  assert.equal(isHeicFile(await prepareImageFile(file)), true);
+});
+
+test("does not convert actual JPEG bytes even if the filename still ends in HEIC", async () => {
+  const file = await prepareImageFile(new File([new Uint8Array([0xff, 0xd8, 0xff])], "export.HEIC"));
+  assert.equal(isHeicFile(file), false);
+  // This also verifies ordinary images do not import the browser-only converter in Node.
+  assert.equal(await toDisplayable(file), file);
 });

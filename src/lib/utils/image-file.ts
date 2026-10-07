@@ -24,8 +24,30 @@ export async function prepareImageFile(file: File): Promise<File> {
     else if (brands.some(brand => ["mif1", "msf1"].includes(brand))) mime = "image/heif";
   }
   if (!mime && file.type.startsWith("image/")) mime = file.type;
+  if (!mime && /\.(heic|heif)$/i.test(file.name)) mime = "image/heic";
   if (!mime) throw new Error("Không nhận diện được định dạng ảnh. Vui lòng chọn ảnh JPG, PNG, WebP hoặc xuất ảnh từ thư viện rồi thử lại.");
   return mime === file.type ? file : new File([file], file.name, { type: mime, lastModified: file.lastModified });
+}
+
+export function isHeicFile(file: File) {
+  // Trust a recognized JPEG/PNG/etc. signature even if an export kept its old name.
+  if (/^image\/(jpeg|png|webp|gif|bmp|avif)$/i.test(file.type)) return false;
+  return /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+}
+
+export async function toDisplayable(file: File): Promise<File> {
+  if (!isHeicFile(file)) return file;
+  try {
+    // Browser-only and loaded on demand, so SSR and ordinary JPEG uploads stay light.
+    const { default: heic2any } = await import("heic2any");
+    const output = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const blob = Array.isArray(output) ? output[0] : output;
+    if (!blob?.size) throw new Error("Empty conversion result");
+    const name = file.name.replace(/\.[^.]+$/, "") || "photo";
+    return new File([blob], `${name}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch {
+    throw new Error("Chưa chuyển được ảnh HEIC/HEIF này sang JPEG. Hãy thử lại hoặc xuất ảnh thành JPG từ điện thoại rồi chọn lại.");
+  }
 }
 
 export function imageDisplayError(mime: string) {

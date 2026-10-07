@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ArrowLeft, ArrowRight, Camera, Check, Copy, Download, Image as ImageIcon, Info, LoaderCircle, MapPin, RefreshCcw, Sparkles, Clock, AlertTriangle } from "lucide-react";
 import type { LocationData, AnalysisData } from "@/lib/store/ReportContext";
 import { readPhotoMeta, requestGeolocation } from "@/lib/utils/camera";
-import { prepareImageFile, imageDisplayError } from "@/lib/utils/image-file";
+import { prepareImageFile, imageDisplayError, isHeicFile, toDisplayable } from "@/lib/utils/image-file";
 import styles from "./home.module.css";
 
 type Screen = "home" | "analysis" | "report";
-type Phase = "reading" | "location" | "analyzing" | "ready" | "error";
+type Phase = "reading" | "converting" | "location" | "analyzing" | "ready" | "error";
 const categories = ["Ổ gà, hư mặt đường", "Ngập nước", "Đèn đường hỏng", "Rác thải", "Khác / không nhận diện được"];
 const disclaimer = "SnapFix CT chỉ hỗ trợ chuẩn bị nội dung phản ánh. Việc gửi phản ánh được thực hiện tại kênh chính thức của cơ quan chức năng.";
 
@@ -108,6 +108,7 @@ export default function SnapFixCT() {
     const selectedFile = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!selectedFile) return;
+    const capturedNow = new Date().toISOString();
     const token = ++generation.current;
     let file: File;
     try {
@@ -118,11 +119,9 @@ export default function SnapFixCT() {
       return;
     }
     if (token !== generation.current) return;
-    const capturedNow = new Date().toISOString();
     const pendingGps = imageSource === "camera" ? gpsRequest.current : null;
     setSource(imageSource);
-    setImageMime(file.type);
-    setPreview(URL.createObjectURL(file));
+    setPreview(null);
     setScreen("analysis");
     setPhase("reading");
     setAnalysis(null);
@@ -133,6 +132,14 @@ export default function SnapFixCT() {
     setNotice("");
     try {
       const meta = await readPhotoMeta(file);
+      if (token !== generation.current) return;
+      // Read GPS/time from the original bytes before conversion strips EXIF.
+      if (isHeicFile(file)) setPhase("converting");
+      const displayFile = await toDisplayable(file);
+      if (token !== generation.current) return;
+      setImageMime(displayFile.type);
+      setPreview(URL.createObjectURL(displayFile));
+      setPhase("reading");
       const coords = pendingGps ? await pendingGps : null;
       if (token !== generation.current) return;
       const loc: LocationData = coords ? { type: "gps", ...coords, text: "" } : meta.location;
@@ -142,10 +149,10 @@ export default function SnapFixCT() {
       setTimeFromExif(imageSource === "library" && meta.timeFromExif);
       if (loc.type === "manual" && !loc.text) setPhase("location");
       else await analyze(loc, capturedAt, token);
-    } catch {
+    } catch (error) {
       if (token !== generation.current) return;
       setPhase("error");
-      setError("Không đọc được ảnh này. Hãy chọn ảnh JPG, PNG hoặc chụp lại.");
+      setError(error instanceof Error ? error.message : "Không đọc được ảnh này. Hãy chọn ảnh JPG, PNG hoặc chụp lại.");
     }
   }
 
@@ -187,7 +194,7 @@ export default function SnapFixCT() {
     setNotice("Đã tải bản nháp. Phản ánh chưa được gửi đến cơ quan chức năng.");
   }
 
-  const busy = phase === "reading" || phase === "analyzing";
+  const busy = phase === "reading" || phase === "converting" || phase === "analyzing";
   const locationEditor = (
     <form className={styles.editor} onSubmit={event => { event.preventDefault(); saveLocation(); }}>
       <label htmlFor="incident-location">{phase === "location" ? "Bạn chụp ở đâu?" : "Nơi xảy ra sự cố"}</label>
@@ -261,7 +268,7 @@ export default function SnapFixCT() {
               </div>
               <div className={styles.assistantLabel}><Sparkles size={18} /> Trợ lý SnapFix <span>Bản demo</span></div>
               <div aria-live="polite">
-                {busy && <div className={styles.loading}><LoaderCircle className={styles.spinner} size={22} /><div><strong>{phase === "reading" ? "Đang xem ảnh của bạn…" : "Đang chuẩn bị kết quả minh họa…"}</strong><p>{phase === "reading" ? "Kiểm tra thông tin vị trí và thời gian trong ảnh." : "AI chưa được kết nối. Bạn sẽ tự xác nhận thông tin sự cố."}</p></div></div>}
+                {busy && <div className={styles.loading}><LoaderCircle className={styles.spinner} size={22} /><div><strong>{phase === "converting" ? "Đang xử lý ảnh…" : phase === "reading" ? "Đang xem ảnh của bạn…" : "Đang chuẩn bị kết quả minh họa…"}</strong><p>{phase === "converting" ? "Đang chuyển HEIC sang JPEG. Quá trình này có thể mất vài giây." : phase === "reading" ? "Kiểm tra thông tin vị trí và thời gian trong ảnh." : "AI chưa được kết nối. Bạn sẽ tự xác nhận thông tin sự cố."}</p></div></div>}
                 {phase === "location" && locationEditor}
                 {phase === "error" && <div className={styles.warning} role="alert"><p>{error}</p><button className={styles.secondary} onClick={reset}>Chọn ảnh khác</button></div>}
               </div>
