@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { ArrowLeft, ArrowRight, Camera, Check, Copy, Download, Image as ImageIcon, Info, LoaderCircle, MapPin, RefreshCcw, Sparkles, Clock, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Image as ImageIcon, Info, LoaderCircle, MapPin, RefreshCcw, Sparkles, Clock, AlertTriangle } from "lucide-react";
 import type { LocationData, AnalysisData } from "@/lib/store/ReportContext";
 import { readPhotoMeta, requestGeolocation } from "@/lib/utils/camera";
 import { prepareImageFile, imageDisplayError, isHeicFile, toDisplayable } from "@/lib/utils/image-file";
+import { ReportConfirmation } from "@/components/report/ReportConfirmation";
 import styles from "./home.module.css";
 
 type Screen = "home" | "analysis" | "report";
@@ -175,25 +176,6 @@ export default function SnapFixCT() {
     else updateDetails(loc, time);
   }
 
-  async function copyDraft() {
-    try {
-      await navigator.clipboard.writeText(draft);
-      setNotice("Đã sao chép nội dung. Bạn có thể dán vào kênh tiếp nhận chính thức.");
-    } catch {
-      setNotice("Trình duyệt chưa cho phép sao chép. Bạn có thể chọn nội dung trong ô bên trên hoặc tải bản nháp.");
-    }
-  }
-
-  function downloadDraft() {
-    const url = URL.createObjectURL(new Blob([draft], { type: "text/plain;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "SnapFix-CT-phan-anh.txt";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setNotice("Đã tải bản nháp. Phản ánh chưa được gửi đến cơ quan chức năng.");
-  }
-
   const busy = phase === "reading" || phase === "converting" || phase === "analyzing";
   const locationEditor = (
     <form className={styles.editor} onSubmit={event => { event.preventDefault(); saveLocation(); }}>
@@ -287,21 +269,17 @@ export default function SnapFixCT() {
               </section>}
             </>
           ) : analysis && (
-            <>
-              <section className={styles.summary}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {preview && <img src={preview} alt="Ảnh sự cố đang soạn phản ánh" />}
-                <div><h2>{analysis.category}</h2><p>{locationLabel(location)}</p><p>{formatTime(time)}</p><button className={styles.textButton} onClick={() => setScreen("analysis")}>Sửa thông tin</button></div>
-              </section>
-              <section className={styles.card}>
-                <div className={styles.cardHeading}><label htmlFor="report-draft">Nội dung phản ánh</label><button className={styles.textButton} onClick={() => { setDraft(originalDraft); setNotice("Đã khôi phục bản nháp theo thông tin hiện tại."); }}><RefreshCcw size={15} /> Khôi phục</button></div>
-                <p className={styles.muted}>Đây là bản nháp mẫu. Hãy bổ sung tình trạng thực tế trước khi gửi.</p>
-                <textarea id="report-draft" rows={13} value={draft} onChange={event => setDraft(event.target.value)} />
-              </section>
-              <section className={styles.card}><h2>Kênh tiếp nhận</h2><p className={styles.muted}>Chưa cấu hình đường dẫn tiếp nhận chính thức cho sự cố này. Bạn có thể sao chép hoặc tải nội dung để gửi qua kênh của địa phương.</p></section>
-              <p className={styles.disclaimer}><Info size={18} /><span>{disclaimer}</span></p>
-              <div className={styles.actions}><button className={styles.primary} disabled={!draft.trim()} onClick={copyDraft}><Copy size={19} /> Sao chép nội dung</button><button className={styles.secondary} disabled={!draft.trim()} onClick={downloadDraft}><Download size={19} /> Tải bản nháp</button><button className={styles.textButton} onClick={() => setScreen("analysis")}><ArrowLeft size={17} /> Quay lại kết quả</button></div>
-            </>
+            <ReportConfirmation
+              preview={preview}
+              category={analysis.category}
+              locationLabel={locationLabel(location)}
+              timeLabel={formatTime(time)}
+              draft={draft}
+              originalDraft={originalDraft}
+              setDraft={setDraft}
+              onEditInfo={() => setScreen("analysis")}
+              onSetNotice={setNotice}
+            />
           )}
           {notice && <p className={styles.notice} role="status">{notice}</p>}
         </main>
