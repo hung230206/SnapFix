@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ArrowLeft, ArrowRight, Camera, Check, Copy, Download, Image as ImageIcon, Info, LoaderCircle, MapPin, RefreshCcw, Sparkles, Clock, AlertTriangle } from "lucide-react";
 import type { LocationData, AnalysisData } from "@/lib/store/ReportContext";
 import { readPhotoMeta, requestGeolocation } from "@/lib/utils/camera";
+import { prepareImageFile, imageDisplayError } from "@/lib/utils/image-file";
 import styles from "./home.module.css";
 
 type Screen = "home" | "analysis" | "report";
@@ -31,6 +32,7 @@ export default function SnapFixCT() {
   const [screen, setScreen] = useState<Screen>("home");
   const [phase, setPhase] = useState<Phase>("reading");
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageMime, setImageMime] = useState("");
   const [source, setSource] = useState<"camera" | "library">("library");
   const [location, setLocation] = useState<LocationData>({ type: "manual", text: "" });
   const [time, setTime] = useState("");
@@ -103,17 +105,23 @@ export default function SnapFixCT() {
   }
 
   async function selectImage(event: ChangeEvent<HTMLInputElement>, imageSource: "camera" | "library") {
-    const file = event.currentTarget.files?.[0];
+    const selectedFile = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 20 * 1024 * 1024) {
-      setError("Vui lòng chọn một ảnh có dung lượng tối đa 20 MB.");
+    if (!selectedFile) return;
+    const token = ++generation.current;
+    let file: File;
+    try {
+      file = await prepareImageFile(selectedFile);
+    } catch (error) {
+      if (token !== generation.current) return;
+      setError(error instanceof Error ? error.message : "Không đọc được tệp ảnh. Vui lòng chọn lại.");
       return;
     }
-    const token = ++generation.current;
+    if (token !== generation.current) return;
     const capturedNow = new Date().toISOString();
     const pendingGps = imageSource === "camera" ? gpsRequest.current : null;
     setSource(imageSource);
+    setImageMime(file.type);
     setPreview(URL.createObjectURL(file));
     setScreen("analysis");
     setPhase("reading");
@@ -248,7 +256,7 @@ export default function SnapFixCT() {
               <div className={styles.photoMessage}>
                 {/* Local object URLs are temporary user-selected images. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {preview && <img src={preview} alt="Ảnh sự cố bạn đã chọn" onError={() => { generation.current += 1; setPhase("error"); setError("Trình duyệt không hiển thị được ảnh này. Hãy chọn ảnh JPG hoặc PNG."); }} />}
+                {preview && <img src={preview} alt="Ảnh sự cố bạn đã chọn" onError={() => { generation.current += 1; setPhase("error"); setError(imageDisplayError(imageMime)); }} />}
                 <span>{source === "camera" ? "Ảnh vừa chụp của bạn" : "Ảnh bạn chọn từ thư viện"}</span>
               </div>
               <div className={styles.assistantLabel}><Sparkles size={18} /> Trợ lý SnapFix <span>Bản demo</span></div>
