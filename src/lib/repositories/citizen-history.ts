@@ -20,9 +20,22 @@ export function getCitizenHistoryDB() {
         });
         store.createIndex('by-createdAt', 'createdAt');
       },
+    }).catch(error => {
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise as Promise<IDBPDatabase<CitizenHistoryDB>>;
+}
+
+export async function countCitizenReports(): Promise<number> {
+  const db = await getCitizenHistoryDB();
+  return db.count('citizen_reports');
+}
+
+export async function clearCitizenHistory(): Promise<void> {
+  const db = await getCitizenHistoryDB();
+  await db.clear('citizen_reports');
 }
 
 export async function saveCitizenReport(report: CitizenReport): Promise<void> {

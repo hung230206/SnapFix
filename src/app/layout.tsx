@@ -19,6 +19,8 @@ export const metadata: Metadata = {
 };
 
 import { ReportProvider } from "@/lib/store/ReportContext";
+import { UserPreferencesProvider } from "@/lib/store/UserPreferencesContext";
+import { CitizenDraftProvider } from "@/lib/store/CitizenDraftContext";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -27,9 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ReportProvider>
-          {children}
-        </ReportProvider>
+        <UserPreferencesProvider>
+          <CitizenDraftProvider><ReportProvider>
+            {children}
+          </ReportProvider></CitizenDraftProvider>
+        </UserPreferencesProvider>
       </body>
     </html>
   );

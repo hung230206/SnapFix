@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Camera, Check, Image as ImageIcon, Info, LoaderCircle, MapPin, RefreshCcw, Sparkles, Clock, AlertTriangle } from "lucide-react";
 import type { LocationData, AnalysisData } from "@/lib/store/ReportContext";
 import { readPhotoMeta, requestGeolocation } from "@/lib/utils/camera";
 import { prepareImageFile, imageDisplayError, isHeicFile, toDisplayable } from "@/lib/utils/image-file";
 import { ReportConfirmation } from "@/components/report/ReportConfirmation";
+import { getCitizenReport, saveCitizenReport } from "@/lib/repositories/citizen-history";
+import { useUserPreferences } from "@/lib/store/UserPreferencesContext";
+import { useCitizenDraft } from "@/lib/store/CitizenDraftContext";
+import type { CitizenReport } from "@/domain/citizen-report";
 import styles from "./home.module.css";
 
 type Screen = "home" | "analysis" | "report";
@@ -30,17 +35,29 @@ function vietnamTimeInput(value: string) {
 }
 
 export default function SnapFixCT() {
-  const [screen, setScreen] = useState<Screen>("home");
-  const [phase, setPhase] = useState<Phase>("reading");
+  return <Suspense fallback={<div role="status">Đang tải SnapFix…</div>}><CitizenHome /></Suspense>;
+}
+
+function CitizenHome() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { savedDraft, keepDraft } = useCitizenDraft();
+  const [initialDraft] = useState(savedDraft);
+  const [screen, setScreen] = useState<Screen>(initialDraft ? "report" : "home");
+  const [phase, setPhase] = useState<Phase>(initialDraft ? "ready" : "reading");
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageBlob, setImageBlob] = useState<Blob | null>(initialDraft?.imageBlob ?? null);
+  const [savedReport, setSavedReport] = useState<CitizenReport | null>(initialDraft?.savedReport ?? null);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const [imageMime, setImageMime] = useState("");
-  const [source, setSource] = useState<"camera" | "library">("library");
-  const [location, setLocation] = useState<LocationData>({ type: "manual", text: "" });
-  const [time, setTime] = useState("");
-  const [timeFromExif, setTimeFromExif] = useState(false);
-  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
-  const [draft, setDraft] = useState("");
-  const [originalDraft, setOriginalDraft] = useState("");
+  const [source, setSource] = useState<"camera" | "library">(initialDraft?.source ?? "library");
+  const [location, setLocation] = useState<LocationData>(initialDraft?.location ?? { type: "manual", text: "" });
+  const [time, setTime] = useState(initialDraft?.time ?? "");
+  const [timeFromExif, setTimeFromExif] = useState(initialDraft?.timeFromExif ?? false);
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(initialDraft?.analysis ?? null);
+  const [draft, setDraft] = useState(initialDraft?.draft ?? "");
+  const [originalDraft, setOriginalDraft] = useState(initialDraft?.originalDraft ?? "");
   const [locationInput, setLocationInput] = useState("");
   const [editingLocation, setEditingLocation] = useState(false);
   const [editingTime, setEditingTime] = useState(false);
@@ -52,6 +69,15 @@ export default function SnapFixCT() {
   const gpsRequest = useRef<ReturnType<typeof requestGeolocation> | null>(null);
   const generation = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
+  const { preferences, isLoaded } = useUserPreferences();
+
+  useEffect(() => {
+    if (initialDraft) {
+      // Recreate the temporary URL from the retained Blob after route navigation.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPreview(URL.createObjectURL(initialDraft.imageBlob));
+    }
+  }, [initialDraft]);
 
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
@@ -63,6 +89,41 @@ export default function SnapFixCT() {
   }, [screen]);
 
   useEffect(() => () => { generation.current += 1; }, []);
+
+  useEffect(() => {
+    const editId = searchParams?.get("edit");
+    let cancelled = false;
+    if (editId && initialDraft?.savedReport?.id !== editId) {
+      getCitizenReport(editId).then(report => {
+        if (cancelled) return;
+        if (report) {
+          setSavedReport(report);
+          setScreen("report");
+          setPhase("ready");
+          setAnalysis({
+            category: report.category,
+            severity: report.severity,
+            reason: "Đang xem lại báo cáo đã lưu",
+            confidence: 0,
+            draft: report.originalDraft
+          });
+          setImageBlob(report.imageBlob);
+          setImageMime(report.imageBlob.type);
+          setPreview(URL.createObjectURL(report.imageBlob));
+          setLocation({
+            type: report.location.type,
+            lat: report.location.lat,
+            lng: report.location.lng,
+            text: report.location.text,
+          });
+          setTime(report.capturedAt);
+          setDraft(report.editedDraft);
+          setOriginalDraft(report.originalDraft);
+        } else setError("Không tìm thấy phản ánh đã lưu.");
+      }).catch(() => { if (!cancelled) setError("Không đọc được phản ánh đã lưu. Vui lòng thử lại từ Lịch sử."); });
+    }
+    return () => { cancelled = true; };
+  }, [searchParams, initialDraft]);
 
   function reset() {
     generation.current += 1;
@@ -77,6 +138,10 @@ export default function SnapFixCT() {
     setNotice("");
     setDraft("");
     setOriginalDraft("");
+    setSavedReport(null);
+    setImageBlob(null);
+    keepDraft(null);
+    if (searchParams.has("edit")) router.replace("/");
   }
 
   async function analyze(loc: LocationData, capturedAt: string, token = generation.current) {
@@ -100,8 +165,12 @@ export default function SnapFixCT() {
   }
 
   function openCamera() {
-    // Keep the picker in the click gesture: awaiting GPS can block it on mobile.
-    gpsRequest.current = requestGeolocation();
+    if (!isLoaded) return;
+    if (preferences.useDeviceLocationForCapture) {
+      gpsRequest.current = requestGeolocation();
+    } else {
+      gpsRequest.current = null;
+    }
     cameraInput.current?.click();
   }
 
@@ -126,6 +195,8 @@ export default function SnapFixCT() {
     setScreen("analysis");
     setPhase("reading");
     setAnalysis(null);
+    setSavedReport(null);
+    keepDraft(null);
     setEditingLocation(false);
     setEditingTime(false);
     setLocationInput("");
@@ -139,6 +210,7 @@ export default function SnapFixCT() {
       const displayFile = await toDisplayable(file);
       if (token !== generation.current) return;
       setImageMime(displayFile.type);
+      setImageBlob(displayFile);
       setPreview(URL.createObjectURL(displayFile));
       setPhase("reading");
       const coords = pendingGps ? await pendingGps : null;
@@ -174,6 +246,45 @@ export default function SnapFixCT() {
     setEditingLocation(false);
     if (phase === "location") void analyze(loc, time);
     else updateDetails(loc, time);
+  }
+
+  async function saveToHistory() {
+    if (savingRef.current) return;
+    if (!draft.trim() || !analysis || !imageBlob) {
+      setNotice("Chưa thể lưu. Vui lòng kiểm tra lại thông tin.");
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const id = savedReport?.id || crypto.randomUUID();
+      const now = new Date().toISOString();
+      const report: CitizenReport = {
+        ...savedReport,
+        id,
+        category: analysis.category,
+        severity: analysis.severity,
+        imageBlob,
+        location: { ...location, lat: location.lat ?? undefined, lng: location.lng ?? undefined },
+        capturedAt: time,
+        originalDraft,
+        editedDraft: draft,
+        status: savedReport?.status ?? "Đã chuẩn bị",
+        statusSource: savedReport?.statusSource ?? "system",
+        createdAt: savedReport?.createdAt || now,
+        updatedAt: now,
+      };
+      await saveCitizenReport(report);
+      setSavedReport(report);
+      setNotice("Đã lưu vào lịch sử phản ánh.");
+    } catch {
+      setNotice("Không thể lưu phản ánh. Vui lòng kiểm tra dung lượng trình duyệt.");
+    } finally { savingRef.current = false; setSaving(false); }
+  }
+
+  function viewHistory() {
+    if (imageBlob && analysis) keepDraft({ imageBlob, source, location, time, timeFromExif, analysis, draft, originalDraft, savedReport });
+    router.push("/history");
   }
 
   const busy = phase === "reading" || phase === "converting" || phase === "analyzing";
@@ -228,7 +339,7 @@ export default function SnapFixCT() {
             <span>Ghi nhận điều cần được quan tâm</span>
           </div>
           <div className={styles.actions}>
-            <button className={styles.primary} onClick={openCamera}><Camera size={24} /> Chụp ảnh</button>
+            <button className={styles.primary} disabled={!isLoaded} onClick={openCamera}><Camera size={24} /> Chụp ảnh</button>
             <button className={styles.secondary} onClick={() => libraryInput.current?.click()}><ImageIcon size={23} /> Tải ảnh lên <span className={styles.buttonHint}>Từ thư viện</span></button>
           </div>
           <p className={styles.photoHint}>Chụp rõ sự cố và một phần khung cảnh xung quanh.</p>
@@ -279,6 +390,9 @@ export default function SnapFixCT() {
               setDraft={setDraft}
               onEditInfo={() => setScreen("analysis")}
               onSetNotice={setNotice}
+              onSaveToHistory={saveToHistory}
+              saving={saving}
+              onViewHistory={viewHistory}
             />
           )}
           {notice && <p className={styles.notice} role="status">{notice}</p>}

@@ -11,6 +11,9 @@ interface ReportConfirmationProps {
   setDraft: (value: string) => void;
   onEditInfo: () => void;
   onSetNotice: (msg: string) => void;
+  onSaveToHistory?: () => void;
+  saving?: boolean;
+  onViewHistory?: () => void;
   receivingChannel?: {
     name: string;
     reportUrl: string;
@@ -27,6 +30,9 @@ export function ReportConfirmation({
   setDraft,
   onEditInfo,
   onSetNotice,
+  onSaveToHistory,
+  saving = false,
+  onViewHistory,
   receivingChannel,
 }: ReportConfirmationProps) {
   const isEdited = draft !== originalDraft;
@@ -110,7 +116,17 @@ export function ReportConfirmation({
       </p>
 
       <div className={styles.actions}>
-        <button className={styles.primary} disabled={isEmpty} onClick={handleCopy}>
+        {onSaveToHistory && (
+          <button className={styles.primary} disabled={isEmpty || saving} onClick={onSaveToHistory}>
+            {saving ? "Đang lưu…" : "Lưu vào lịch sử"}
+          </button>
+        )}
+        {onViewHistory && (
+          <button className={styles.secondary} disabled={saving} onClick={onViewHistory}>
+            Xem lịch sử
+          </button>
+        )}
+        <button className={styles.secondary} disabled={isEmpty} onClick={handleCopy}>
           <Copy size={19} /> Sao chép nội dung
         </button>
         <button className={styles.secondary} disabled={isEmpty} onClick={handleDownload}>
