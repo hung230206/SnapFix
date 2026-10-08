@@ -18,11 +18,13 @@ import {
 } from "@/domain/incident/status";
 import {
   DemoAssetRepository,
+  DemoDepartmentRepository,
   DemoIssueQuestionOptionRepository,
   DemoIssueQuestionRepository,
   DemoIssueTypeRepository,
   DemoObservationEvidenceRepository,
   DemoObservationRepository,
+  DemoUserRepository,
 } from "@/lib/repositories/DemoRepositories";
 import {
   officerIncidentEventRepository,
@@ -40,6 +42,16 @@ export type IncidentDetailTimelineItem = {
   description?: string;
   occurredAt: string;
   tone: IncidentStatusTone;
+};
+
+export type OfficerIncidentAssignmentSummary = {
+  teamId: string;
+  teamName: string;
+  officerId?: string;
+  officerName?: string;
+  deadline?: string;
+  note?: string;
+  assignedAt: string;
 };
 
 export type OfficerIncidentDetail = {
@@ -82,6 +94,7 @@ export type OfficerIncidentDetail = {
   };
   reportCount: number;
   relatedReportCount: number;
+  assignment?: OfficerIncidentAssignmentSummary;
   timeline: IncidentDetailTimelineItem[];
 };
 
@@ -91,6 +104,8 @@ const observationRepository = new DemoObservationRepository();
 const observationEvidenceRepository = new DemoObservationEvidenceRepository();
 const assetRepository = new DemoAssetRepository();
 const eventRepository = officerIncidentEventRepository;
+const departmentRepository = new DemoDepartmentRepository();
+const userRepository = new DemoUserRepository();
 const questionRepository = new DemoIssueQuestionRepository();
 const questionOptionRepository = new DemoIssueQuestionOptionRepository();
 
@@ -260,6 +275,18 @@ export class OfficerIncidentDetailService {
       (first, second) =>
         new Date(first.submittedAt).getTime() - new Date(second.submittedAt).getTime(),
     )[0];
+    const latestAssignmentEvent = [...events]
+      .filter((event) => event.type === "ASSIGNED")
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      )[0];
+    const [assignedDepartment, assignedOfficer] = await Promise.all([
+      incident.assignedDepartmentId
+        ? departmentRepository.findById(incident.assignedDepartmentId)
+        : null,
+      incident.assignedOfficerId ? userRepository.findById(incident.assignedOfficerId) : null,
+    ]);
     const primaryEvidence = primaryObservation?.evidenceId
       ? await observationEvidenceRepository.findById(primaryObservation.evidenceId)
       : null;
@@ -333,6 +360,20 @@ export class OfficerIncidentDetailService {
         : undefined,
       reportCount: incident.independentReportCount,
       relatedReportCount: Math.max(0, incident.independentReportCount - 1),
+      assignment: incident.assignedDepartmentId
+        ? {
+            teamId: incident.assignedDepartmentId,
+            teamName: assignedDepartment?.name ?? incident.assignedDepartmentId,
+            officerId: incident.assignedOfficerId,
+            officerName: assignedOfficer?.displayName,
+            deadline:
+              typeof latestAssignmentEvent?.metadata?.deadline === "string"
+                ? latestAssignmentEvent.metadata.deadline
+                : undefined,
+            note: latestAssignmentEvent?.note,
+            assignedAt: latestAssignmentEvent?.createdAt ?? incident.updatedAt,
+          }
+        : undefined,
       timeline: [...events]
         .sort(
           (first, second) =>

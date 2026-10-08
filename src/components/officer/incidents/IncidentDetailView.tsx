@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 
 import { IncidentLocationMap } from "@/components/officer/incidents/IncidentLocationMap";
+import { IncidentAssignmentPanel } from "@/components/officer/incidents/IncidentAssignmentPanel";
 import { IncidentReviewPanel } from "@/components/officer/incidents/IncidentReviewPanel";
 import type { IncidentStatusTone } from "@/domain/incident/status";
 import type { OfficerIncidentDetail } from "@/services/officer-incident-detail-service";
+import type { OfficerIncidentAssignmentOptions } from "@/services/officer-incident-assignment-service";
 
 const TONE_CLASSES: Record<IncidentStatusTone, string> = {
   neutral: "bg-slate-100 text-slate-700",
@@ -84,7 +86,13 @@ function SectionCard({
   );
 }
 
-export function IncidentDetailView({ incident }: { incident: OfficerIncidentDetail }) {
+export function IncidentDetailView({
+  incident,
+  assignmentOptions,
+}: {
+  incident: OfficerIncidentDetail;
+  assignmentOptions: OfficerIncidentAssignmentOptions;
+}) {
   const hasCoordinates = incident.location.lat !== undefined && incident.location.lng !== undefined;
 
   return (
@@ -123,8 +131,14 @@ export function IncidentDetailView({ incident }: { incident: OfficerIncidentDeta
         </div>
       </header>
 
-      <div className="w-full xl:ml-auto xl:max-w-[520px]">
+      <div className="flex w-full flex-col gap-5 xl:ml-auto xl:max-w-[520px]">
         <IncidentReviewPanel incidentId={incident.id} status={incident.status.code} />
+        <IncidentAssignmentPanel
+          incidentId={incident.id}
+          status={incident.status.code}
+          assignment={incident.assignment}
+          options={assignmentOptions}
+        />
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,0.85fr)] xl:items-start">
