@@ -17,6 +17,7 @@ import {
 import { IncidentLocationMap } from "@/components/officer/incidents/IncidentLocationMap";
 import { IncidentAssignmentPanel } from "@/components/officer/incidents/IncidentAssignmentPanel";
 import { IncidentReviewPanel } from "@/components/officer/incidents/IncidentReviewPanel";
+import { IncidentProcessingPanel } from "@/components/officer/incidents/IncidentProcessingPanel";
 import type { IncidentStatusTone } from "@/domain/incident/status";
 import type { OfficerIncidentDetail } from "@/services/officer-incident-detail-service";
 import type { OfficerIncidentAssignmentOptions } from "@/services/officer-incident-assignment-service";
@@ -133,11 +134,19 @@ export function IncidentDetailView({
 
       <div className="flex w-full flex-col gap-5 xl:ml-auto xl:max-w-[520px]">
         <IncidentReviewPanel incidentId={incident.id} status={incident.status.code} />
-        <IncidentAssignmentPanel
+        {incident.status.code === "VERIFIED" ? (
+          <IncidentAssignmentPanel
+            incidentId={incident.id}
+            status={incident.status.code}
+            assignment={incident.assignment}
+            options={assignmentOptions}
+          />
+        ) : null}
+        <IncidentProcessingPanel
           incidentId={incident.id}
           status={incident.status.code}
           assignment={incident.assignment}
-          options={assignmentOptions}
+          processing={incident.processing}
         />
       </div>
 

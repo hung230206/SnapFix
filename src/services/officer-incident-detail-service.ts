@@ -54,6 +54,11 @@ export type OfficerIncidentAssignmentSummary = {
   assignedAt: string;
 };
 
+export type OfficerIncidentProcessingSummary = {
+  startedAt: string;
+  note?: string;
+};
+
 export type OfficerIncidentDetail = {
   id: string;
   publicCode: string;
@@ -95,6 +100,7 @@ export type OfficerIncidentDetail = {
   reportCount: number;
   relatedReportCount: number;
   assignment?: OfficerIncidentAssignmentSummary;
+  processing?: OfficerIncidentProcessingSummary;
   timeline: IncidentDetailTimelineItem[];
 };
 
@@ -281,6 +287,17 @@ export class OfficerIncidentDetailService {
         (first, second) =>
           new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
       )[0];
+    const latestProcessingEvent = [...events]
+      .filter(
+        (event) =>
+          event.type === "STATUS_CHANGED" &&
+          event.oldStatus === "ASSIGNED" &&
+          event.newStatus === "IN_PROGRESS",
+      )
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      )[0];
     const [assignedDepartment, assignedOfficer] = await Promise.all([
       incident.assignedDepartmentId
         ? departmentRepository.findById(incident.assignedDepartmentId)
@@ -372,6 +389,15 @@ export class OfficerIncidentDetailService {
                 : undefined,
             note: latestAssignmentEvent?.note,
             assignedAt: latestAssignmentEvent?.createdAt ?? incident.updatedAt,
+          }
+        : undefined,
+      processing: latestProcessingEvent
+        ? {
+            startedAt:
+              typeof latestProcessingEvent.metadata?.startedAt === "string"
+                ? latestProcessingEvent.metadata.startedAt
+                : latestProcessingEvent.createdAt,
+            note: latestProcessingEvent.note,
           }
         : undefined,
       timeline: [...events]

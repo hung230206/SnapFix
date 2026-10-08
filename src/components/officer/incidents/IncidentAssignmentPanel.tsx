@@ -47,7 +47,11 @@ function formatDeadline(deadline: string): string {
   return DATE_FORMATTER.format(new Date(`${deadline}T00:00:00Z`));
 }
 
-function AssignmentSummary({ assignment }: { assignment: OfficerIncidentAssignmentSummary }) {
+export function IncidentAssignmentSummary({
+  assignment,
+}: {
+  assignment: OfficerIncidentAssignmentSummary;
+}) {
   return (
     <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div className="rounded-[10px] bg-[#F9FAFB] p-3">
@@ -282,7 +286,7 @@ export function IncidentAssignmentPanel({
             </Button>
           </div>
         ) : assignment ? (
-          <AssignmentSummary assignment={assignment} />
+          <IncidentAssignmentSummary assignment={assignment} />
         ) : null}
       </section>
 
