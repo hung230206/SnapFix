@@ -29,6 +29,7 @@ import {
 import {
   officerIncidentEventRepository,
   officerIncidentRepository,
+  officerResolutionRepository,
 } from "@/lib/repositories/officer-demo-repositories";
 
 export type IncidentDetailMetadataItem = {
@@ -57,6 +58,19 @@ export type OfficerIncidentAssignmentSummary = {
 export type OfficerIncidentProcessingSummary = {
   startedAt: string;
   note?: string;
+};
+
+export type OfficerIncidentResolutionSummary = {
+  resultText: string;
+  image: {
+    dataUrl: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    width: number;
+    height: number;
+  };
+  submittedAt: string;
 };
 
 export type OfficerIncidentDetail = {
@@ -101,6 +115,7 @@ export type OfficerIncidentDetail = {
   relatedReportCount: number;
   assignment?: OfficerIncidentAssignmentSummary;
   processing?: OfficerIncidentProcessingSummary;
+  resolution?: OfficerIncidentResolutionSummary;
   timeline: IncidentDetailTimelineItem[];
 };
 
@@ -110,6 +125,7 @@ const observationRepository = new DemoObservationRepository();
 const observationEvidenceRepository = new DemoObservationEvidenceRepository();
 const assetRepository = new DemoAssetRepository();
 const eventRepository = officerIncidentEventRepository;
+const resolutionRepository = officerResolutionRepository;
 const departmentRepository = new DemoDepartmentRepository();
 const userRepository = new DemoUserRepository();
 const questionRepository = new DemoIssueQuestionRepository();
@@ -255,6 +271,8 @@ function buildTimelineItem(event: IncidentEvent): IncidentDetailTimelineItem {
     label:
       event.type === "STATUS_CHANGED" && status
         ? `Cập nhật trạng thái: ${status.label}`
+        : event.type === "RESOLUTION_UPLOADED" && status
+          ? `Gửi kết quả: ${status.label}`
         : EVENT_LABELS[event.type],
     description: event.note,
     occurredAt: event.createdAt,
@@ -270,11 +288,12 @@ export class OfficerIncidentDetailService {
       return null;
     }
 
-    const [issueType, observations, events, questions] = await Promise.all([
+    const [issueType, observations, events, questions, resolution] = await Promise.all([
       issueTypeRepository.findByCode(incident.issueTypeCode),
       observationRepository.findByIncidentId(incident.id),
       eventRepository.findByIncidentId(incident.id),
       questionRepository.findByIssueTypeCode(incident.issueTypeCode),
+      resolutionRepository.findByIncidentId(incident.id),
     ]);
 
     const primaryObservation = [...observations].sort(
@@ -398,6 +417,13 @@ export class OfficerIncidentDetailService {
                 ? latestProcessingEvent.metadata.startedAt
                 : latestProcessingEvent.createdAt,
             note: latestProcessingEvent.note,
+          }
+        : undefined,
+      resolution: resolution
+        ? {
+            resultText: resolution.resultText,
+            image: resolution.image,
+            submittedAt: resolution.submittedAt,
           }
         : undefined,
       timeline: [...events]

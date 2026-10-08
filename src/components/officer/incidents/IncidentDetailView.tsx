@@ -18,6 +18,7 @@ import { IncidentLocationMap } from "@/components/officer/incidents/IncidentLoca
 import { IncidentAssignmentPanel } from "@/components/officer/incidents/IncidentAssignmentPanel";
 import { IncidentReviewPanel } from "@/components/officer/incidents/IncidentReviewPanel";
 import { IncidentProcessingPanel } from "@/components/officer/incidents/IncidentProcessingPanel";
+import { IncidentResolutionPanel } from "@/components/officer/incidents/IncidentResolutionPanel";
 import type { IncidentStatusTone } from "@/domain/incident/status";
 import type { OfficerIncidentDetail } from "@/services/officer-incident-detail-service";
 import type { OfficerIncidentAssignmentOptions } from "@/services/officer-incident-assignment-service";
@@ -147,6 +148,13 @@ export function IncidentDetailView({
           status={incident.status.code}
           assignment={incident.assignment}
           processing={incident.processing}
+        />
+        <IncidentResolutionPanel
+          incidentId={incident.id}
+          publicCode={incident.publicCode}
+          status={incident.status.code}
+          assignment={incident.assignment}
+          resolution={incident.resolution}
         />
       </div>
 
