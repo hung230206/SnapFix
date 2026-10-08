@@ -9,10 +9,10 @@ import {
 } from "@/domain/incident/status";
 import {
   DemoAssetRepository,
-  DemoIncidentRepository,
   DemoIssueTypeRepository,
   DemoObservationRepository,
 } from "@/lib/repositories/DemoRepositories";
+import { officerIncidentRepository } from "@/lib/repositories/officer-demo-repositories";
 
 export type OfficerReportFilterOption<TValue extends string> = {
   value: TValue;
@@ -25,7 +25,7 @@ export type OfficerReportListSnapshot = {
   priorityOptions: OfficerReportFilterOption<Severity>[];
 };
 
-const incidentRepository = new DemoIncidentRepository();
+const incidentRepository = officerIncidentRepository;
 const issueTypeRepository = new DemoIssueTypeRepository();
 const observationRepository = new DemoObservationRepository();
 const assetRepository = new DemoAssetRepository();

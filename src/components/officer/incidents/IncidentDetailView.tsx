@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { IncidentLocationMap } from "@/components/officer/incidents/IncidentLocationMap";
+import { IncidentReviewPanel } from "@/components/officer/incidents/IncidentReviewPanel";
 import type { IncidentStatusTone } from "@/domain/incident/status";
 import type { OfficerIncidentDetail } from "@/services/officer-incident-detail-service";
 
@@ -121,6 +122,10 @@ export function IncidentDetailView({ incident }: { incident: OfficerIncidentDeta
           </div>
         </div>
       </header>
+
+      <div className="w-full xl:ml-auto xl:max-w-[520px]">
+        <IncidentReviewPanel incidentId={incident.id} status={incident.status.code} />
+      </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,0.85fr)] xl:items-start">
         <div className="flex min-w-0 flex-col gap-5">

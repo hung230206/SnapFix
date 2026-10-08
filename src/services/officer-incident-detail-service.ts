@@ -5,6 +5,7 @@ import type {
   ConfidenceLevel,
   IncidentEvent,
   IncidentEventType,
+  IncidentStatus,
   LocationSource,
   Observation,
   ObservationEvidence,
@@ -17,14 +18,16 @@ import {
 } from "@/domain/incident/status";
 import {
   DemoAssetRepository,
-  DemoIncidentEventRepository,
-  DemoIncidentRepository,
   DemoIssueQuestionOptionRepository,
   DemoIssueQuestionRepository,
   DemoIssueTypeRepository,
   DemoObservationEvidenceRepository,
   DemoObservationRepository,
 } from "@/lib/repositories/DemoRepositories";
+import {
+  officerIncidentEventRepository,
+  officerIncidentRepository,
+} from "@/lib/repositories/officer-demo-repositories";
 
 export type IncidentDetailMetadataItem = {
   label: string;
@@ -49,6 +52,7 @@ export type OfficerIncidentDetail = {
   capturedAt?: string;
   imageUrl?: string;
   status: {
+    code: IncidentStatus;
     label: string;
     tone: IncidentStatusTone;
   };
@@ -81,12 +85,12 @@ export type OfficerIncidentDetail = {
   timeline: IncidentDetailTimelineItem[];
 };
 
-const incidentRepository = new DemoIncidentRepository();
+const incidentRepository = officerIncidentRepository;
 const issueTypeRepository = new DemoIssueTypeRepository();
 const observationRepository = new DemoObservationRepository();
 const observationEvidenceRepository = new DemoObservationEvidenceRepository();
 const assetRepository = new DemoAssetRepository();
-const eventRepository = new DemoIncidentEventRepository();
+const eventRepository = officerIncidentEventRepository;
 const questionRepository = new DemoIssueQuestionRepository();
 const questionOptionRepository = new DemoIssueQuestionOptionRepository();
 
@@ -297,7 +301,7 @@ export class OfficerIncidentDetailService {
       submittedAt: primaryObservation?.submittedAt ?? incident.createdAt,
       capturedAt: primaryObservation?.capturedAt,
       imageUrl: resolvePublicAssetUrl(asset?.storagePath),
-      status,
+      status: { code: incident.status, ...status },
       priority: {
         ...priority,
         score: incident.priorityScore,
