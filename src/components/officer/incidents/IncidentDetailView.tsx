@@ -19,6 +19,7 @@ import { IncidentAssignmentPanel } from "@/components/officer/incidents/Incident
 import { IncidentReviewPanel } from "@/components/officer/incidents/IncidentReviewPanel";
 import { IncidentProcessingPanel } from "@/components/officer/incidents/IncidentProcessingPanel";
 import { IncidentResolutionPanel } from "@/components/officer/incidents/IncidentResolutionPanel";
+import { IncidentCompletionPanel } from "@/components/officer/incidents/IncidentCompletionPanel";
 import type { IncidentStatusTone } from "@/domain/incident/status";
 import type { OfficerIncidentDetail } from "@/services/officer-incident-detail-service";
 import type { OfficerIncidentAssignmentOptions } from "@/services/officer-incident-assignment-service";
@@ -149,12 +150,23 @@ export function IncidentDetailView({
           assignment={incident.assignment}
           processing={incident.processing}
         />
-        <IncidentResolutionPanel
+        {incident.status.code === "IN_PROGRESS" ? (
+          <IncidentResolutionPanel
+            incidentId={incident.id}
+            publicCode={incident.publicCode}
+            status={incident.status.code}
+            assignment={incident.assignment}
+            resolution={incident.resolution}
+          />
+        ) : null}
+        <IncidentCompletionPanel
           incidentId={incident.id}
           publicCode={incident.publicCode}
           status={incident.status.code}
           assignment={incident.assignment}
+          processing={incident.processing}
           resolution={incident.resolution}
+          completion={incident.completion}
         />
       </div>
 

@@ -73,6 +73,10 @@ export type OfficerIncidentResolutionSummary = {
   submittedAt: string;
 };
 
+export type OfficerIncidentCompletionSummary = {
+  confirmedAt: string;
+};
+
 export type OfficerIncidentDetail = {
   id: string;
   publicCode: string;
@@ -116,6 +120,7 @@ export type OfficerIncidentDetail = {
   assignment?: OfficerIncidentAssignmentSummary;
   processing?: OfficerIncidentProcessingSummary;
   resolution?: OfficerIncidentResolutionSummary;
+  completion?: OfficerIncidentCompletionSummary;
   timeline: IncidentDetailTimelineItem[];
 };
 
@@ -273,6 +278,8 @@ function buildTimelineItem(event: IncidentEvent): IncidentDetailTimelineItem {
         ? `Cập nhật trạng thái: ${status.label}`
         : event.type === "RESOLUTION_UPLOADED" && status
           ? `Gửi kết quả: ${status.label}`
+          : event.type === "CLOSED" && status
+            ? `Xác nhận hoàn thành: ${status.label}`
         : EVENT_LABELS[event.type],
     description: event.note,
     occurredAt: event.createdAt,
@@ -312,6 +319,17 @@ export class OfficerIncidentDetailService {
           event.type === "STATUS_CHANGED" &&
           event.oldStatus === "ASSIGNED" &&
           event.newStatus === "IN_PROGRESS",
+      )
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      )[0];
+    const latestCompletionEvent = [...events]
+      .filter(
+        (event) =>
+          event.type === "CLOSED" &&
+          event.oldStatus === "RESOLVED" &&
+          event.newStatus === "CLOSED",
       )
       .sort(
         (first, second) =>
@@ -426,6 +444,15 @@ export class OfficerIncidentDetailService {
             submittedAt: resolution.submittedAt,
           }
         : undefined,
+      completion:
+        latestCompletionEvent || incident.closedAt
+          ? {
+              confirmedAt:
+                typeof latestCompletionEvent?.metadata?.confirmedAt === "string"
+                  ? latestCompletionEvent.metadata.confirmedAt
+                  : (incident.closedAt ?? latestCompletionEvent?.createdAt ?? incident.updatedAt),
+            }
+          : undefined,
       timeline: [...events]
         .sort(
           (first, second) =>
