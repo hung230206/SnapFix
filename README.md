@@ -1,6 +1,6 @@
-# SnapFix CT
+# SnapFix
 
-SnapFix CT is a coherent, end-to-end civic incident management system built with Next.js 16 (App Router), Tailwind CSS, and shadcn/ui. It connects citizens reporting urban issues with the local officers responsible for fixing them.
+SnapFix is a civic incident management demo built with Next.js 16 (App Router), Tailwind CSS, and shadcn/ui. The citizen flow prepares reports for officers to receive within SnapFix; direct submission remains disabled until the receiving department and backend are connected.
 
 ## Core Concepts & Architecture
 
@@ -51,6 +51,16 @@ The system logic is designed to function 100% without AI. AI features (like sugg
    ```
 
 ## Next Steps / Future Work
+### Citizen MVP frontend demo
+- The home page now submits independent reports to IndexedDB; `/officer/reports` and the officer dashboard read these same submissions. This is local browser data, not delivery to a real authority.
+- No YOLO inference is performed. Citizens confirm the category manually; classification confidence is unavailable. The image step no longer asks for danger/severity.
+- After submission, reports of the same known category within 30 metres and 7 days share an incident reference. Missing coordinates and unknown categories stay separate. Each report retains its own photo, description and ID.
+- Demo priority uses report count only: 1–2 LOW, 3–4 MEDIUM, 5+ HIGH. These are prototype rules, not validated danger assessments or verified unique-person counts.
+- Submission and history writes are atomic and retry-safe. Deleting a history copy does not withdraw the submitted demo report. Clearing browser site data removes the demo submissions.
+- Submitted records enter NEW (Chờ duyệt). The complete eight-step officer workflow described in the reference document is not present in this checkout; this inbox is the frontend handoff point for later integration.
+- Verify with `node --experimental-strip-types --test tests/*.test.mjs` and `npm run build`.
+
+### Future integrations
 - Connect AI Adapter to real Gemini API.
 - Implement real PostgreSQL / Prisma database backend.
 - Enhance PWA Service Worker for true background sync of IndexedDB drafts.

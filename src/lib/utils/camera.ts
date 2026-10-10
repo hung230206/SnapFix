@@ -1,5 +1,5 @@
 import exifr from "exifr";
-import { LocationData } from "../store/ReportContext";
+import type { LocationData } from "../store/ReportContext";
 
 export async function requestGeolocation(): Promise<{ lat: number; lng: number } | null> {
   if (!navigator.geolocation) return null;
@@ -7,7 +7,7 @@ export async function requestGeolocation(): Promise<{ lat: number; lng: number }
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
-      (err) => resolve(null), // Timeout, denied, or unavailable
+      () => resolve(null), // Timeout, denied, or unavailable
       { timeout: 5000, enableHighAccuracy: true }
     );
   });
@@ -33,7 +33,7 @@ export async function readPhotoMeta(file: File): Promise<{
       location = { type: "exif", lat: gpsData.latitude, lng: gpsData.longitude, text: "" };
     }
 
-    if (meta?.DateTimeOriginal) {
+    if (meta?.DateTimeOriginal && Number.isFinite(new Date(meta.DateTimeOriginal).getTime())) {
       capturedAt = new Date(meta.DateTimeOriginal).toISOString();
       timeFromExif = true;
     }
