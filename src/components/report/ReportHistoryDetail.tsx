@@ -81,7 +81,8 @@ export function ReportHistoryDetail({
             <h3>Thông tin sự cố</h3>
             <div className={styles.detailRow}>
               <div>
-                <strong>{report.category}</strong> (Mức: {report.severity})<br/>
+                <strong>{report.category}</strong><br/>
+                {report.submission && <p>{report.submission.reportCount} lượt phản ánh · Ưu tiên {report.submission.priority === 'HIGH' ? 'cao' : report.submission.priority === 'MEDIUM' ? 'trung bình' : 'thấp'} (demo)</p>}
                 {report.location.text}
               </div>
             </div>
@@ -107,13 +108,9 @@ export function ReportHistoryDetail({
           </div>
 
           <div className={styles.detailSection}>
-            <h3>Kênh tiếp nhận</h3>
+            <h3>Đơn vị tiếp nhận</h3>
             <div className={styles.detailRow}>
-              {report.receivingChannel ? (
-                <a href={report.receivingChannel.reportUrl} target="_blank" rel="noreferrer">{report.receivingChannel.name}</a>
-              ) : (
-                "Chưa có kênh tiếp nhận"
-              )}
+              {report.receivingDepartment?.name || report.receivingChannel?.name || "Chưa cấu hình đơn vị tiếp nhận"}
             </div>
           </div>
 
@@ -122,8 +119,10 @@ export function ReportHistoryDetail({
             <select 
               className={styles.statusSelect} 
               value={status} 
+              disabled={Boolean(report.submission)}
               onChange={e => handleStatusChange(e.target.value as ReportStatus)}
             >
+              <option value="Chờ duyệt">Chờ duyệt</option>
               <option value="Đã chuẩn bị">Đã chuẩn bị</option>
               <option value="Đã mở kênh tiếp nhận">Đã mở kênh tiếp nhận</option>
               <option value="Đang xử lý">Đang xử lý</option>
@@ -136,7 +135,7 @@ export function ReportHistoryDetail({
           </div>
 
           <div className={styles.detailActions}>
-            <button className={styles.primary} onClick={onEdit}><Edit3 size={18} /> Chỉnh sửa nội dung</button>
+            {!report.submission && <button className={styles.primary} onClick={onEdit}><Edit3 size={18} /> Chỉnh sửa nội dung</button>}
             <button className={styles.deleteButton} onClick={handleDelete}><Trash2 size={18} /> Xóa khỏi lịch sử</button>
           </div>
         </div>

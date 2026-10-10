@@ -55,6 +55,9 @@
   margin: 0;
 }
 
+.departmentTitle { display: flex; align-items: center; gap: 9px; }
+.departmentTitle svg { color: #008b50; flex-shrink: 0; }
+
 .cardHeading {
   display: flex;
   align-items: center;

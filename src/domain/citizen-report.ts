@@ -1,4 +1,4 @@
-export type ReportStatus = "Đã chuẩn bị" | "Đã mở kênh tiếp nhận" | "Đang xử lý" | "Đã xử lý";
+export type ReportStatus = "Đã chuẩn bị" | "Chờ duyệt" | "Đã mở kênh tiếp nhận" | "Đang xử lý" | "Đã xử lý";
 
 export interface CitizenReport {
   id: string;
@@ -14,6 +14,10 @@ export interface CitizenReport {
   capturedAt: string;
   originalDraft: string;
   editedDraft: string;
+  receivingDepartment?: {
+    id: string;
+    name: string;
+  };
   receivingChannel?: {
     name: string;
     reportUrl: string;
@@ -23,4 +27,14 @@ export interface CitizenReport {
   createdAt: string;
   updatedAt: string;
   channelOpenedAt?: string;
+  submission?: {
+    incidentId: string;
+    submittedAt: string;
+    workflowStatus: "NEW";
+    confidence: number | null;
+    classificationSource: "manual";
+    reportCount: number;
+    priority: "LOW" | "MEDIUM" | "HIGH";
+    priorityReason: string;
+  };
 }

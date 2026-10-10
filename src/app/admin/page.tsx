@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Settings, Users, Database, LayoutTemplate, Share2 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -18,7 +17,7 @@ export default function AdminDashboard() {
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-2">Cấu hình SnapFix CT</h2>
+          <h2 className="text-2xl font-bold mb-2">Cấu hình SnapFix</h2>
           <p className="text-muted-foreground">Quản lý danh mục, người dùng và luật định tuyến toàn hệ thống.</p>
         </div>
 

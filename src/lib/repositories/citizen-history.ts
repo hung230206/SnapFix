@@ -1,7 +1,9 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { CitizenReport } from '@/domain/citizen-report';
+import { currentSubmission } from '@/domain/citizen-mvp';
 
 interface CitizenHistoryDB extends DBSchema {
+  citizen_submissions: { key: string; value: CitizenReport };
   citizen_reports: {
     key: string;
     value: CitizenReport;
@@ -13,12 +15,15 @@ let dbPromise: Promise<IDBPDatabase<CitizenHistoryDB>> | null = null;
 
 export function getCitizenHistoryDB() {
   if (!dbPromise && typeof window !== 'undefined') {
-    dbPromise = openDB<CitizenHistoryDB>('snapfix-citizen-history-db', 1, {
+    dbPromise = openDB<CitizenHistoryDB>('snapfix-citizen-history-db', 2, {
       upgrade(db) {
+        if (!db.objectStoreNames.contains('citizen_submissions')) db.createObjectStore('citizen_submissions', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('citizen_reports')) {
         const store = db.createObjectStore('citizen_reports', {
           keyPath: 'id',
         });
         store.createIndex('by-createdAt', 'createdAt');
+        }
       },
     }).catch(error => {
       dbPromise = null;
@@ -45,12 +50,15 @@ export async function saveCitizenReport(report: CitizenReport): Promise<void> {
 
 export async function getCitizenReport(id: string): Promise<CitizenReport | undefined> {
   const db = await getCitizenHistoryDB();
-  return db.get('citizen_reports', id);
+  const report = await db.get('citizen_reports', id);
+  return report ? currentSubmission(report, await db.getAll('citizen_submissions')) : undefined;
 }
 
 export async function getAllCitizenReports(): Promise<CitizenReport[]> {
   const db = await getCitizenHistoryDB();
-  return db.getAllFromIndex('citizen_reports', 'by-createdAt'); // Ascending order
+  const reports = await db.getAllFromIndex('citizen_reports', 'by-createdAt');
+  const submitted = await db.getAll('citizen_submissions');
+  return reports.map(report => currentSubmission(report, submitted));
 }
 
 export async function deleteCitizenReport(id: string): Promise<void> {

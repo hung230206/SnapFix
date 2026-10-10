@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SnapFix CT",
+  title: "SnapFix",
   description: "Hệ thống quản lý sự cố hạ tầng đô thị",
   manifest: "/manifest.json",
 };

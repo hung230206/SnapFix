@@ -12,11 +12,12 @@ import { useUserPreferences } from "@/lib/store/UserPreferencesContext";
 import { useCitizenDraft } from "@/lib/store/CitizenDraftContext";
 import type { CitizenReport } from "@/domain/citizen-report";
 import styles from "./home.module.css";
+import { submitCitizenReport } from "@/services/citizen-submission-service";
 
 type Screen = "home" | "analysis" | "report";
 type Phase = "reading" | "converting" | "location" | "analyzing" | "ready" | "error";
 const categories = ["Ổ gà, hư mặt đường", "Ngập nước", "Đèn đường hỏng", "Rác thải", "Khác / không nhận diện được"];
-const disclaimer = "SnapFix CT chỉ hỗ trợ chuẩn bị nội dung phản ánh. Việc gửi phản ánh được thực hiện tại kênh chính thức của cơ quan chức năng.";
+const disclaimer = "MVP thử nghiệm: phản ánh được lưu trên trình duyệt và hiển thị trong danh sách cán bộ demo. Chưa kết nối AI hay cơ quan tiếp nhận thật.";
 
 function locationLabel(location: LocationData) {
   return location.text || (location.lat != null && location.lng != null ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "Chưa có vị trí");
@@ -34,7 +35,7 @@ function vietnamTimeInput(value: string) {
   return new Date(new Date(value).getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 16);
 }
 
-export default function SnapFixCT() {
+export default function SnapFix() {
   return <Suspense fallback={<div role="status">Đang tải SnapFix…</div>}><CitizenHome /></Suspense>;
 }
 
@@ -59,6 +60,9 @@ function CitizenHome() {
   const [draft, setDraft] = useState(initialDraft?.draft ?? "");
   const [originalDraft, setOriginalDraft] = useState(initialDraft?.originalDraft ?? "");
   const [locationInput, setLocationInput] = useState("");
+  const [latitudeInput, setLatitudeInput] = useState("");
+  const [longitudeInput, setLongitudeInput] = useState("");
+  const [locating, setLocating] = useState(false);
   const [editingLocation, setEditingLocation] = useState(false);
   const [editingTime, setEditingTime] = useState(false);
   const [timeInput, setTimeInput] = useState("");
@@ -132,6 +136,8 @@ function CitizenHome() {
     setAnalysis(null);
     setLocation({ type: "manual", text: "" });
     setLocationInput("");
+    setLatitudeInput("");
+    setLongitudeInput("");
     setEditingLocation(false);
     setEditingTime(false);
     setError("");
@@ -153,7 +159,7 @@ function CitizenHome() {
       if (token !== generation.current) return;
       const category = categories[4];
       const text = draftFor(category, loc, capturedAt);
-      setAnalysis({ category, severity: "low", reason: "Chưa có kết quả nhận diện thực tế. Hãy chọn loại sự cố và mức cảnh báo dựa trên những gì bạn quan sát được.", confidence: 0, draft: text });
+      setAnalysis({ category, severity: "low", reason: "YOLO chưa kết nối. Loại sự cố do bạn xác nhận; confidence chưa có. Ưu tiên chỉ được cập nhật sau khi gửi dựa trên số lượt phản ánh.", confidence: 0, draft: text });
       setDraft(text);
       setOriginalDraft(text);
       setPhase("ready");
@@ -191,6 +197,8 @@ function CitizenHome() {
     if (token !== generation.current) return;
     const pendingGps = imageSource === "camera" ? gpsRequest.current : null;
     setSource(imageSource);
+    setLatitudeInput("");
+    setLongitudeInput("");
     setPreview(null);
     setScreen("analysis");
     setPhase("reading");
@@ -241,14 +249,35 @@ function CitizenHome() {
 
   function saveLocation() {
     if (!locationInput.trim()) return;
-    const loc: LocationData = { type: "manual", text: locationInput.trim() };
+    const lat = latitudeInput.trim() ? Number(latitudeInput) : undefined;
+    const lng = longitudeInput.trim() ? Number(longitudeInput) : undefined;
+    if ((lat !== undefined || lng !== undefined) && (lat === undefined || lng === undefined || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180)) {
+      setNotice("Nhập đủ vĩ độ (-90 đến 90) và kinh độ (-180 đến 180).");
+      return;
+    }
+    const loc: LocationData = { type: "manual", text: locationInput.trim(), lat, lng };
     setLocation(loc);
     setEditingLocation(false);
     if (phase === "location") void analyze(loc, time);
     else updateDetails(loc, time);
   }
 
-  async function saveToHistory() {
+  async function requestCurrentLocation() {
+    if (locating) return;
+    const token = generation.current;
+    setLocating(true);
+    const coords = await requestGeolocation();
+    setLocating(false);
+    if (token !== generation.current) return;
+    if (!coords) { setNotice("Không lấy được GPS. Bạn có thể nhập địa chỉ và tọa độ bên dưới."); return; }
+    const loc: LocationData = { type: "gps", ...coords, text: "" };
+    setLocation(loc);
+    setEditingLocation(false);
+    if (phase === "location") await analyze(loc, time);
+    else updateDetails(loc, time);
+  }
+
+  async function saveToHistory(submit = false) {
     if (savingRef.current) return;
     if (!draft.trim() || !analysis || !imageBlob) {
       setNotice("Chưa thể lưu. Vui lòng kiểm tra lại thông tin.");
@@ -274,9 +303,16 @@ function CitizenHome() {
         createdAt: savedReport?.createdAt || now,
         updatedAt: now,
       };
-      await saveCitizenReport(report);
-      setSavedReport(report);
-      setNotice("Đã lưu vào lịch sử phản ánh.");
+      if (submit) {
+        const result = await submitCitizenReport(report);
+        setSavedReport(result);
+        keepDraft(null);
+        setNotice("Đã gửi báo cáo độc lập vào danh sách cán bộ demo. Chưa gửi tới cơ quan thật.");
+      } else {
+        await saveCitizenReport(report);
+        setSavedReport(report);
+        setNotice("Đã lưu bản nháp vào lịch sử phản ánh.");
+      }
     } catch {
       setNotice("Không thể lưu phản ánh. Vui lòng kiểm tra dung lượng trình duyệt.");
     } finally { savingRef.current = false; setSaving(false); }
@@ -292,7 +328,13 @@ function CitizenHome() {
     <form className={styles.editor} onSubmit={event => { event.preventDefault(); saveLocation(); }}>
       <label htmlFor="incident-location">{phase === "location" ? "Bạn chụp ở đâu?" : "Nơi xảy ra sự cố"}</label>
       <p>Ghi số nhà, tên đường hoặc địa điểm gần đó để dễ tìm đúng nơi.</p>
+      <button type="button" className={styles.secondary} disabled={locating} onClick={() => void requestCurrentLocation()}>{locating ? "Đang lấy GPS…" : "Dùng GPS hiện tại"}</button>
+      <p>Chỉ dùng GPS hiện tại nếu bạn đang ở nơi xảy ra sự cố. Không có tọa độ thì báo cáo vẫn được gửi riêng.</p>
       <input id="incident-location" autoFocus required maxLength={300} value={locationInput} onChange={event => setLocationInput(event.target.value)} placeholder="Ví dụ: trước số 12 đường Nguyễn Văn Cừ…" />
+      <label htmlFor="incident-lat">Vĩ độ (tùy chọn)</label>
+      <input id="incident-lat" type="number" step="any" min="-90" max="90" value={latitudeInput} onChange={e => setLatitudeInput(e.target.value)} />
+      <label htmlFor="incident-lng">Kinh độ (tùy chọn)</label>
+      <input id="incident-lng" type="number" step="any" min="-180" max="180" value={longitudeInput} onChange={e => setLongitudeInput(e.target.value)} />
       <div className={styles.row}>
         {editingLocation && <button type="button" className={styles.textButton} onClick={() => setEditingLocation(false)}>Hủy</button>}
         <button className={styles.primary} disabled={!locationInput.trim()}><Check size={18} /> Xác nhận vị trí</button>
@@ -304,7 +346,7 @@ function CitizenHome() {
     <div className={styles.shell}>
       <header className={styles.header}>
         {screen !== "home" && <button className={styles.iconButton} aria-label={screen === "report" ? "Quay lại kết quả" : "Về trang chủ"} onClick={() => { setScreen(screen === "report" ? "analysis" : "home"); setNotice(""); }}><ArrowLeft size={22} /></button>}
-        <div className={styles.brand}><span>SnapFix</span> CT<span className={styles.brandDot}>.</span></div>
+        <div className={styles.brand}><span>SnapFix</span></div>
         <span className={styles.headerNote}>Một tấm ảnh, một thay đổi</span>
       </header>
 
@@ -312,8 +354,8 @@ function CitizenHome() {
         <main className={styles.home}>
           <div className={styles.intro}>
             <span className={styles.eyebrow}>CÙNG CHĂM SÓC THÀNH PHỐ</span>
-            <h1 ref={heading} tabIndex={-1}>Chụp ảnh sự cố hạ tầng<br />và nhận hỗ trợ từ AI</h1>
-            <p>Bắt đầu bằng một tấm ảnh.<br />SnapFix giúp bạn chuẩn bị nội dung phản ánh.</p>
+            <h1 ref={heading} tabIndex={-1}>Ghi nhận sự cố hạ tầng<br />gửi phản ánh của bạn</h1>
+            <p>Ảnh + vị trí → xác nhận loại sự cố → gửi báo cáo.<br />Mỗi phản ánh là một ghi nhận độc lập.</p>
           </div>
           <div className={styles.illustration} aria-hidden="true">
             <svg viewBox="0 0 480 200" fill="none">
@@ -369,9 +411,8 @@ function CitizenHome() {
                 <div className={styles.cardHeading}><h2>Thông tin sự cố</h2><span className={styles.demoTag}>Cần xác nhận</span></div>
                 <p className={styles.warning}><AlertTriangle size={18} /><span>AI chưa được kết nối nên chưa thể nhận diện ảnh hoặc đánh giá mức độ. Bạn hãy kiểm tra các thông tin bên dưới.</span></p>
                 <label className={styles.field}>Loại sự cố<select value={analysis.category} onChange={event => updateDetails(location, time, event.target.value)}>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
-                <label className={styles.field}>Mức cảnh báo bạn ghi nhận<select value={analysis.severity} onChange={event => setAnalysis({ ...analysis, severity: event.target.value as AnalysisData["severity"] })}><option value="low">Thấp</option><option value="medium">Trung bình</option><option value="high">Cao</option></select></label>
                 <div className={styles.detail}><Sparkles size={18} /><div><strong>Độ tin cậy AI: chưa có</strong><p>{analysis.reason}</p></div></div>
-                <div className={styles.detail}><MapPin size={18} /><div><strong>{locationLabel(location)}</strong><p>{location.type === "exif" ? "Vị trí lấy từ ảnh" : location.type === "gps" ? "GPS thiết bị khi chụp ảnh" : "Vị trí do bạn cung cấp"}</p><button className={styles.textButton} onClick={() => { setLocationInput(locationLabel(location)); setEditingLocation(true); }}>Bấm để sửa vị trí</button></div></div>
+                <div className={styles.detail}><MapPin size={18} /><div><strong>{locationLabel(location)}</strong><p>{location.type === "exif" ? "Vị trí lấy từ ảnh" : location.type === "gps" ? "Vị trí GPS thiết bị" : "Vị trí do bạn cung cấp"}</p><button className={styles.textButton} onClick={() => { setLocationInput(locationLabel(location)); setLatitudeInput(location.lat?.toString() ?? ""); setLongitudeInput(location.lng?.toString() ?? ""); setEditingLocation(true); }}>Bấm để sửa vị trí</button></div></div>
                 {editingLocation && locationEditor}
                 <div className={styles.detail}><Clock size={18} /><div><strong>{formatTime(time)}</strong><p>{source === "camera" ? "Thời điểm chụp ảnh" : timeFromExif ? "Thời gian lấy từ ảnh" : "Giờ của tệp ảnh; có thể khác giờ chụp"} · Giờ Việt Nam</p><button className={styles.textButton} onClick={() => { setTimeInput(vietnamTimeInput(time)); setEditingTime(true); }}>Bấm để sửa thời gian</button></div></div>
                 {editingTime && <form className={styles.editor} onSubmit={event => { event.preventDefault(); const value = new Date(`${timeInput}:00+07:00`); if (!Number.isFinite(value.getTime())) return; const nextTime = value.toISOString(); setTime(nextTime); updateDetails(location, nextTime); setEditingTime(false); }}><label htmlFor="capture-time">Thời gian chụp (giờ Việt Nam)</label><input id="capture-time" type="datetime-local" required value={timeInput} onChange={event => setTimeInput(event.target.value)} /><div className={styles.row}><button type="button" className={styles.textButton} onClick={() => setEditingTime(false)}>Hủy</button><button className={styles.primary}>Lưu thời gian</button></div></form>}
@@ -385,12 +426,17 @@ function CitizenHome() {
               category={analysis.category}
               locationLabel={locationLabel(location)}
               timeLabel={formatTime(time)}
+              receivingDepartment={savedReport?.receivingDepartment}
               draft={draft}
               originalDraft={originalDraft}
               setDraft={setDraft}
               onEditInfo={() => setScreen("analysis")}
               onSetNotice={setNotice}
-              onSaveToHistory={saveToHistory}
+              onSaveToHistory={savedReport?.submission ? undefined : () => void saveToHistory()}
+              onSubmitReport={() => void saveToHistory(true)}
+              submitting={saving}
+              submission={savedReport?.submission}
+              onNewReport={reset}
               saving={saving}
               onViewHistory={viewHistory}
             />

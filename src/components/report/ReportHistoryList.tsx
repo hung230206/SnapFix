@@ -6,7 +6,7 @@ import { ReportHistoryDetail } from "./ReportHistoryDetail";
 import styles from "./ReportHistory.module.css";
 
 const statusFilters: (ReportStatus | "Tất cả")[] = [
-  "Tất cả", "Đã chuẩn bị", "Đã mở kênh tiếp nhận", "Đang xử lý", "Đã xử lý"
+  "Tất cả", "Đã chuẩn bị", "Chờ duyệt", "Đã mở kênh tiếp nhận", "Đang xử lý", "Đã xử lý"
 ];
 
 export function ReportHistoryList({ onBack, onNewReport, onEditReport }: { onBack: () => void, onNewReport: () => void, onEditReport: (id: string) => void }) {
@@ -150,7 +150,8 @@ function ReportCard({ report, onClick }: { report: CitizenReport, onClick: () =>
           <span className={styles.statusBadge} data-status={report.status}>{report.status}</span>
         </div>
         <h3 className={styles.cardCategory}>{report.category}</h3>
-        <p className={styles.cardLocation}>{report.location.text || "Chưa có địa điểm"}</p>
+        <p className={styles.cardLocation}>{report.location.text || (report.location.lat != null && report.location.lng != null ? `${report.location.lat.toFixed(5)}, ${report.location.lng.toFixed(5)}` : "Chưa có địa điểm")}</p>
+        {report.submission && <p className={styles.cardLocation}>{report.submission.reportCount} lượt phản ánh · Ưu tiên {report.submission.priority === 'HIGH' ? 'cao' : report.submission.priority === 'MEDIUM' ? 'trung bình' : 'thấp'}</p>}
         <div className={styles.cardFooter}>
           <span className={styles.cardDate}>{date}</span>
         </div>

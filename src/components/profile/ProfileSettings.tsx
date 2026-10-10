@@ -126,10 +126,10 @@ function SettingsForm() {
           <li>Thông tin cá nhân và lịch sử hiện được lưu trên thiết bị này.</li>
           <li>Ảnh có thể chứa vị trí và giờ chụp trong EXIF. Bạn được xem và sửa vị trí trước khi chuẩn bị phản ánh.</li>
           <li>Ảnh HEIC được chuyển sang JPEG sau khi đọc thông tin từ ảnh gốc.</li>
-          <li>SnapFix hỗ trợ chuẩn bị nội dung, không thay thế kênh tiếp nhận chính thức của cơ quan chức năng.</li>
+          <li>SnapFix hỗ trợ ghi nhận sự cố và chuẩn bị phản ánh. Chức năng gửi trực tiếp đang chờ kết nối hệ thống tiếp nhận dành cho cán bộ.</li>
         </ul>
       </section>
-      <section className={styles.section}><h2>Thông tin ứng dụng</h2><p className={styles.muted}>SnapFix CT · Tiếng Việt</p><p className={styles.muted}>Bản demo hỗ trợ chuẩn bị phản ánh sự cố hạ tầng đô thị.</p></section>
+      <section className={styles.section}><h2>Thông tin ứng dụng</h2><p className={styles.muted}>SnapFix · Tiếng Việt</p><p className={styles.muted}>Bản demo hỗ trợ chuẩn bị phản ánh sự cố hạ tầng đô thị.</p></section>
     </main>
   );
 }
