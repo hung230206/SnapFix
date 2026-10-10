@@ -1,5 +1,4 @@
 model: yolo11n.pt
-data: ../data/pothole-detection-v6/snapfix-data.yaml
 epochs: 80
 batch: 4
 imgsz: 640
@@ -10,4 +9,4 @@ patience: 15
 seed: 42
 cache: false
 project: ../runs/detect
-name: yolo11n-pothole
+name: yolo11n-pothole-1class

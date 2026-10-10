@@ -47,6 +47,23 @@ def load_config(path: Path) -> dict[str, Any]:
     return config
 
 
+def require_dataset_config(config: dict[str, Any]) -> None:
+    dataset_value = config.get("data")
+    if not dataset_value:
+        raise SystemExit(
+            "Dataset config is required. Pass --data path/to/data.yaml or use "
+            "a training config that defines data."
+        )
+
+    dataset_path = Path(dataset_value).resolve()
+    if dataset_path.suffix.lower() not in {".yaml", ".yml"}:
+        raise SystemExit(f"Dataset config must be a YAML file: {dataset_path}")
+    if not dataset_path.is_file():
+        raise SystemExit(f"Dataset config was not found: {dataset_path}")
+
+    config["data"] = str(dataset_path)
+
+
 def resolve_device(requested: str | int) -> str | int:
     if str(requested).lower() != "auto":
         return requested
@@ -77,8 +94,6 @@ def serializable_metrics(results: Any) -> dict[str, float]:
 
 
 def main() -> None:
-    from ultralytics import YOLO, settings
-
     args = parse_args()
     config = load_config(args.config)
 
@@ -86,6 +101,10 @@ def main() -> None:
         value = getattr(args, key)
         if value is not None:
             config[key] = str(value.resolve()) if key == "data" else value
+
+    require_dataset_config(config)
+
+    from ultralytics import YOLO, settings
 
     config["device"] = resolve_device(config.get("device", "auto"))
     print_runtime(config["device"])

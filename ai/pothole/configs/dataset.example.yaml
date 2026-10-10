@@ -1,10 +1,9 @@
 # Copy this file next to a local dataset and replace path with its absolute path.
-path: C:/absolute/path/to/ai/pothole/data/pothole-detection-v6
+path: C:/absolute/path/to/ai/pothole/data/pothole-1class-v1
 train: train/images
 val: valid/images
 test: test/images
 
-# Preserve the class indices used by the Roboflow labels.
+# The new detection dataset uses one consistently boxed class.
 names:
-  0: HighRiskPothole
-  1: Pothole
+  0: Pothole
