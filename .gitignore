@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local Python environment
+/.venv-pothole/
+**/__pycache__/
+*.py[cod]
+
+# Pothole AI datasets, training outputs, and model weights
+/ai/pothole/data/
+/ai/pothole/runs/
+/ai/pothole/models/
+/ai/pothole/.ultralytics/
+/ai/pothole/**/*.pt

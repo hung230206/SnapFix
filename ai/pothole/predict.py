@@ -1,0 +1,71 @@
+"""Run local inference on one image and emit structured JSON detections."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+
+import torch
+
+
+ROOT = Path(__file__).resolve().parent
+ULTRALYTICS_CONFIG = ROOT / ".ultralytics"
+ULTRALYTICS_CONFIG.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("YOLO_CONFIG_DIR", str(ULTRALYTICS_CONFIG))
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("image", type=Path)
+    parser.add_argument("--weights", type=Path, required=True)
+    parser.add_argument("--confidence", type=float, default=0.25)
+    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument("--output", type=Path)
+    return parser.parse_args()
+
+
+def main() -> None:
+    from ultralytics import YOLO
+
+    args = parse_args()
+    device: str | int = 0 if args.device == "auto" and torch.cuda.is_available() else args.device
+    if device == "auto":
+        device = "cpu"
+
+    result = YOLO(str(args.weights.resolve())).predict(
+        source=str(args.image.resolve()),
+        conf=args.confidence,
+        imgsz=args.imgsz,
+        device=device,
+        verbose=False,
+    )[0]
+
+    detections = []
+    if result.boxes is not None:
+        for box, confidence, class_id in zip(
+            result.boxes.xyxy.cpu().tolist(),
+            result.boxes.conf.cpu().tolist(),
+            result.boxes.cls.cpu().tolist(),
+            strict=True,
+        ):
+            detections.append(
+                {
+                    "class": result.names[int(class_id)],
+                    "confidence": round(float(confidence), 6),
+                    "bbox": [round(float(coordinate), 2) for coordinate in box],
+                }
+            )
+
+    payload = {"detections": detections}
+    rendered = json.dumps(payload, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered, encoding="utf-8")
+    print(rendered)
+
+
+if __name__ == "__main__":
+    main()
