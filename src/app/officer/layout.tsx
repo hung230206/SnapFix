@@ -13,14 +13,14 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const navItems = [
-    { label: "Tổng quan", href: "/officer", icon: Home },
-    { label: "Danh sách", href: "/officer/reports", icon: List },
-    { label: "Bản đồ", href: "/officer/map", icon: MapIcon },
-    { label: "Thống kê", href: "/officer/statistics", icon: BarChart2 },
-    { label: "Loại sự cố", href: "/officer/categories", icon: Layers },
-    { label: "Người dùng", href: "/officer/users", icon: Users },
-    { label: "Báo cáo", href: "/officer/reports-export", icon: FileText },
-    { label: "Cài đặt", href: "/officer/settings", icon: Settings },
+    { label: "Tổng quan", href: "/officer", icon: Home, available: true },
+    { label: "Danh sách", href: "/officer/reports", icon: List, available: true },
+    { label: "Bản đồ", href: "/officer/map", icon: MapIcon, available: true },
+    { label: "Thống kê", href: "/officer/statistics", icon: BarChart2, available: true },
+    { label: "Loại sự cố", href: "/officer/categories", icon: Layers, available: true },
+    { label: "Người dùng", href: "/officer/users", icon: Users, available: true },
+    { label: "Báo cáo", href: "/officer/reports-export", icon: FileText, available: true },
+    { label: "Cài đặt", href: "/officer/settings", icon: Settings, available: true },
   ];
 
   const mainNavItems = navItems.slice(0, 3);
@@ -51,6 +51,23 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
         </div>
         <nav className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
           {navItems.map((item) => {
+            if (!item.available) {
+              return (
+                <div
+                  key={item.href}
+                  aria-disabled="true"
+                  title="Chức năng sắp có"
+                  className="flex cursor-not-allowed items-center gap-3 rounded-[12px] px-3 py-2.5 text-sm font-medium text-[#9CA3AF]"
+                >
+                  <item.icon className="h-5 w-5 opacity-60" />
+                  <span>{item.label}</span>
+                  <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                    Sắp có
+                  </span>
+                </div>
+              );
+            }
+
             const isActive = pathname === item.href;
             return (
               <Link 
@@ -90,6 +107,23 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
         </div>
         <nav className="flex-1 overflow-y-auto px-4 flex flex-col gap-1">
           {navItems.map((item) => {
+            if (!item.available) {
+              return (
+                <div
+                  key={item.href}
+                  aria-disabled="true"
+                  title="Chức năng sắp có"
+                  className="flex cursor-not-allowed items-center gap-3 rounded-[12px] px-3 py-3 text-[14px] font-medium text-green-100/50"
+                >
+                  <item.icon className="h-5 w-5 opacity-50" />
+                  <span>{item.label}</span>
+                  <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-semibold text-green-100/70">
+                    Sắp có
+                  </span>
+                </div>
+              );
+            }
+
             const isActive = pathname === item.href;
             return (
               <Link 
@@ -184,6 +218,21 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
       {/* --------------------------------------------------- */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] flex justify-around items-center h-[70px] z-30 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         {mainNavItems.map((item) => {
+          if (!item.available) {
+            return (
+              <div
+                key={item.href}
+                aria-disabled="true"
+                title="Chức năng sắp có"
+                className="flex h-full w-full cursor-not-allowed flex-col items-center justify-center gap-0.5 text-[#9CA3AF] opacity-60"
+              >
+                <item.icon className="h-5 w-5" />
+                <span className="text-[11px] font-medium">{item.label}</span>
+                <span className="text-[8px] font-semibold">Sắp có</span>
+              </div>
+            );
+          }
+
           const isActive = pathname === item.href;
           return (
             <Link 
