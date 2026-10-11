@@ -20,11 +20,27 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", type=Path)
     parser.add_argument("--weights", type=Path, required=True)
-    parser.add_argument("--confidence", type=float, default=0.25)
+    parser.add_argument("--conf", "--confidence", dest="confidence", type=float, default=0.25)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="Save an annotated copy of the input image under runs/predict/.",
+    )
     return parser.parse_args()
+
+
+def get_model_name(weights: Path) -> str:
+    """Derive a stable output directory name from an Ultralytics run or weight file."""
+    if weights.parent.name == "weights":
+        return weights.parent.parent.name
+    return weights.stem
+
+
+def get_visualization_path(image: Path, weights: Path) -> Path:
+    return ROOT / "runs" / "predict" / get_model_name(weights) / image.name
 
 
 def main() -> None:
@@ -64,6 +80,12 @@ def main() -> None:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered, encoding="utf-8")
+
+    if args.save:
+        visualization_path = get_visualization_path(args.image, args.weights)
+        visualization_path.parent.mkdir(parents=True, exist_ok=True)
+        result.save(filename=str(visualization_path))
+
     print(rendered)
 
 
