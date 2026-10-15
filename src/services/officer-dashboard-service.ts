@@ -5,13 +5,14 @@ import {
   getPriorityPresentation,
 } from "@/domain/incident/status";
 import {
-  DemoIncidentRepository,
-  DemoIssueTypeRepository,
-  DemoObservationRepository,
-} from "@/lib/repositories/DemoRepositories";
+  officerIncidentRepository,
+  officerIssueTypeRepository,
+  officerObservationRepository,
+} from "@/lib/repositories/officer-repositories";
 
 export type DashboardMetricKey =
-  | "total"
+  | "incidents"
+  | "reports"
   | "pending"
   | "processing"
   | "awaitingConfirmation"
@@ -35,6 +36,7 @@ export type IssueTypeDistributionItem = {
   code: string;
   label: string;
   total: number;
+  reportCount: number;
   color: string;
 };
 
@@ -69,6 +71,7 @@ export type OfficerMapPoint = {
 
 export type OfficerDashboardSnapshot = {
   totalIncidents: number;
+  totalIndependentReports: number;
   metrics: DashboardMetric[];
   dailyReports: DailyReportPoint[];
   issueTypeDistribution: IssueTypeDistributionItem[];
@@ -76,12 +79,19 @@ export type OfficerDashboardSnapshot = {
   mapPoints: OfficerMapPoint[];
 };
 
-const incidentRepository = new DemoIncidentRepository();
-const issueTypeRepository = new DemoIssueTypeRepository();
-const observationRepository = new DemoObservationRepository();
-
-const ISSUE_TYPE_COLORS = ["#087F46", "#2563EB", "#D97706", "#DC2626", "#7C3AED", "#64748B"];
-const PROCESSING_STATUSES: IncidentStatus[] = ["VERIFIED", "ASSIGNED", "IN_PROGRESS"];
+const ISSUE_TYPE_COLORS = [
+  "#087F46",
+  "#2563EB",
+  "#D97706",
+  "#DC2626",
+  "#7C3AED",
+  "#64748B",
+];
+const PROCESSING_STATUSES: IncidentStatus[] = [
+  "VERIFIED",
+  "ASSIGNED",
+  "IN_PROGRESS",
+];
 const COMPLETED_STATUSES: IncidentStatus[] = ["COMMUNITY_VERIFIED", "CLOSED"];
 
 function toDateKey(date: Date): string {
@@ -92,10 +102,12 @@ function toDateKey(date: Date): string {
 }
 
 function formatCoordinateLocation(incident: Incident): string {
-  if (incident.centroidLat === undefined || incident.centroidLng === undefined) {
+  if (
+    incident.centroidLat === undefined ||
+    incident.centroidLng === undefined
+  ) {
     return "Chưa có vị trí xác định";
   }
-
   return `${incident.centroidLat.toFixed(5)}, ${incident.centroidLng.toFixed(5)}`;
 }
 
@@ -114,69 +126,98 @@ function buildDailySeries(incidents: Incident[], asOf: Date): DailyReportPoint[]
     return {
       date: key,
       label: formatter.format(date),
-      total: incidents.filter((incident) => toDateKey(new Date(incident.createdAt)) === key).length,
+      total: incidents
+        .filter((incident) => toDateKey(new Date(incident.createdAt)) === key)
+        .reduce(
+          (total, incident) => total + incident.independentReportCount,
+          0,
+        ),
     };
   });
 }
 
 export class OfficerDashboardService {
-  async getDashboardSnapshot(asOf = new Date()): Promise<OfficerDashboardSnapshot> {
+  async getDashboardSnapshot(
+    asOf = new Date(),
+  ): Promise<OfficerDashboardSnapshot> {
     const [incidents, issueTypes] = await Promise.all([
-      incidentRepository.findAll(),
-      issueTypeRepository.findAll(),
+      officerIncidentRepository.findAll(),
+      officerIssueTypeRepository.findAll(),
     ]);
-
-    const issueTypeNames = new Map(issueTypes.map((issueType) => [issueType.code, issueType.nameVi]));
+    const issueTypeNames = new Map(
+      issueTypes.map((issueType) => [issueType.code, issueType.nameVi]),
+    );
+    const totalIndependentReports = incidents.reduce(
+      (total, incident) => total + incident.independentReportCount,
+      0,
+    );
     const sortedIncidents = [...incidents].sort(
-      (first, second) => new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime(),
+      (first, second) =>
+        new Date(second.updatedAt).getTime() -
+        new Date(first.updatedAt).getTime(),
     );
 
     const recentIncidents = await Promise.all(
-      sortedIncidents.slice(0, 5).map(async (incident): Promise<OfficerIncidentSummary> => {
-        const observations = await observationRepository.findByIncidentId(incident.id);
-        const location = observations.find((observation) => observation.locationText)?.locationText;
+      sortedIncidents.slice(0, 5).map(async (incident) => {
+        const observations =
+          await officerObservationRepository.findByIncidentId(incident.id);
+        const location = observations.find(
+          (observation) => observation.locationText,
+        )?.locationText;
         const status = getIncidentStatusPresentation(incident.status);
         const priority = getPriorityPresentation(incident.priorityLevel);
 
         return {
           id: incident.id,
           publicCode: incident.publicCode,
-          issueType: issueTypeNames.get(incident.issueTypeCode) ?? incident.issueTypeCode,
+          issueType:
+            issueTypeNames.get(incident.issueTypeCode) ?? incident.issueTypeCode,
           location: location ?? formatCoordinateLocation(incident),
           submittedAt: incident.createdAt,
           updatedAt: incident.updatedAt,
           reportCount: incident.independentReportCount,
           status: { code: incident.status, ...status },
           priority,
-        };
+        } satisfies OfficerIncidentSummary;
       }),
     );
 
-    const issueCounts = incidents.reduce<Map<string, number>>((counts, incident) => {
-      counts.set(incident.issueTypeCode, (counts.get(incident.issueTypeCode) ?? 0) + 1);
-      return counts;
-    }, new Map());
-
-    const issueTypeDistribution = [...issueCounts.entries()]
-      .map(([code, total], index) => ({
+    const issueGroups = incidents.reduce<Map<string, Incident[]>>(
+      (groups, incident) => {
+        const group = groups.get(incident.issueTypeCode) ?? [];
+        group.push(incident);
+        groups.set(incident.issueTypeCode, group);
+        return groups;
+      },
+      new Map(),
+    );
+    const issueTypeDistribution = [...issueGroups.entries()]
+      .map(([code, matchingIncidents], index) => ({
         code,
         label: issueTypeNames.get(code) ?? code,
-        total,
+        total: matchingIncidents.length,
+        reportCount: matchingIncidents.reduce(
+          (total, incident) => total + incident.independentReportCount,
+          0,
+        ),
         color: ISSUE_TYPE_COLORS[index % ISSUE_TYPE_COLORS.length],
       }))
       .sort((first, second) => second.total - first.total);
 
     const mapPoints = incidents.flatMap((incident): OfficerMapPoint[] => {
-      if (incident.centroidLat === undefined || incident.centroidLng === undefined) {
+      if (
+        incident.centroidLat === undefined ||
+        incident.centroidLng === undefined
+      ) {
         return [];
       }
-
       const status = getIncidentStatusPresentation(incident.status);
       return [
         {
           id: incident.id,
           publicCode: incident.publicCode,
-          issueType: issueTypeNames.get(incident.issueTypeCode) ?? incident.issueTypeCode,
+          issueType:
+            issueTypeNames.get(incident.issueTypeCode) ?? incident.issueTypeCode,
           lat: incident.centroidLat,
           lng: incident.centroidLng,
           statusLabel: status.label,
@@ -187,37 +228,49 @@ export class OfficerDashboardService {
 
     const metrics: DashboardMetric[] = [
       {
-        key: "total",
-        label: "Tổng phản ánh",
+        key: "incidents",
+        label: "Tổng sự cố",
         value: incidents.length,
-        description: "Tất cả sự cố đang được theo dõi",
+        description: "Số Incident riêng biệt",
+        tone: "neutral",
+      },
+      {
+        key: "reports",
+        label: "Lượt phản ánh",
+        value: totalIndependentReports,
+        description: "Tổng lượt báo độc lập",
         tone: "neutral",
       },
       {
         key: "pending",
-        label: "Chờ duyệt",
+        label: getIncidentStatusPresentation("NEW").label,
         value: incidents.filter((incident) => incident.status === "NEW").length,
         description: "Cần cán bộ kiểm tra",
         tone: "warning",
       },
       {
         key: "processing",
-        label: "Đang xử lý",
-        value: incidents.filter((incident) => PROCESSING_STATUSES.includes(incident.status)).length,
-        description: "Đã tiếp nhận hoặc đang thực hiện",
+        label: "Đang trong quy trình",
+        value: incidents.filter((incident) =>
+          PROCESSING_STATUSES.includes(incident.status),
+        ).length,
+        description: "Đã tiếp nhận, phân công hoặc xử lý",
         tone: "info",
       },
       {
         key: "awaitingConfirmation",
-        label: "Chờ xác nhận",
-        value: incidents.filter((incident) => incident.status === "RESOLVED").length,
+        label: getIncidentStatusPresentation("RESOLVED").label,
+        value: incidents.filter((incident) => incident.status === "RESOLVED")
+          .length,
         description: "Đang chờ kiểm tra kết quả",
         tone: "info",
       },
       {
         key: "completed",
-        label: "Đã hoàn thành",
-        value: incidents.filter((incident) => COMPLETED_STATUSES.includes(incident.status)).length,
+        label: getIncidentStatusPresentation("CLOSED").label,
+        value: incidents.filter((incident) =>
+          COMPLETED_STATUSES.includes(incident.status),
+        ).length,
         description: "Đã kết thúc quy trình xử lý",
         tone: "success",
       },
@@ -225,6 +278,7 @@ export class OfficerDashboardService {
 
     return {
       totalIncidents: incidents.length,
+      totalIndependentReports,
       metrics,
       dailyReports: buildDailySeries(incidents, asOf),
       issueTypeDistribution,

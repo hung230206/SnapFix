@@ -1,18 +1,23 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import type { ConfidenceLevel, Incident, IncidentStatus, Severity } from "@/domain/models";
+import type {
+  ConfidenceLevel,
+  Incident,
+  IncidentStatus,
+  Severity,
+} from "@/domain/models";
 import type { OfficerReportListItem } from "@/domain/incident/report-list";
 import {
   getIncidentStatusPresentation,
   getPriorityPresentation,
 } from "@/domain/incident/status";
 import {
-  DemoAssetRepository,
-  DemoIssueTypeRepository,
-  DemoObservationRepository,
-} from "@/lib/repositories/DemoRepositories";
-import { officerIncidentRepository } from "@/lib/repositories/officer-demo-repositories";
+  officerAssetRepository,
+  officerIncidentRepository,
+  officerIssueTypeRepository,
+  officerObservationRepository,
+} from "@/lib/repositories/officer-repositories";
 
 export type OfficerReportFilterOption<TValue extends string> = {
   value: TValue;
@@ -24,11 +29,6 @@ export type OfficerReportListSnapshot = {
   statusOptions: OfficerReportFilterOption<IncidentStatus>[];
   priorityOptions: OfficerReportFilterOption<Severity>[];
 };
-
-const incidentRepository = officerIncidentRepository;
-const issueTypeRepository = new DemoIssueTypeRepository();
-const observationRepository = new DemoObservationRepository();
-const assetRepository = new DemoAssetRepository();
 
 const OFFICER_WORKFLOW_STATUSES: IncidentStatus[] = [
   "NEW",
@@ -49,7 +49,10 @@ const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
 };
 
 function formatCoordinateLocation(incident: Incident): string {
-  if (incident.centroidLat === undefined || incident.centroidLng === undefined) {
+  if (
+    incident.centroidLat === undefined ||
+    incident.centroidLng === undefined
+  ) {
     return "Chưa có vị trí xác định";
   }
 
@@ -62,17 +65,24 @@ function resolvePublicAssetUrl(storagePath?: string): string | undefined {
   }
 
   const publicDirectory = path.resolve(process.cwd(), "public");
-  const assetPath = path.resolve(publicDirectory, storagePath.replace(/^\/+/, ""));
-  const isInsidePublicDirectory = assetPath.startsWith(`${publicDirectory}${path.sep}`);
+  const assetPath = path.resolve(
+    publicDirectory,
+    storagePath.replace(/^\/+/, ""),
+  );
+  const isInsidePublicDirectory = assetPath.startsWith(
+    `${publicDirectory}${path.sep}`,
+  );
 
-  return isInsidePublicDirectory && existsSync(assetPath) ? storagePath : undefined;
+  return isInsidePublicDirectory && existsSync(assetPath)
+    ? storagePath
+    : undefined;
 }
 
 export class OfficerReportListService {
   async getReportList(): Promise<OfficerReportListSnapshot> {
     const [incidents, issueTypes] = await Promise.all([
-      incidentRepository.findAll(),
-      issueTypeRepository.findAll(),
+      officerIncidentRepository.findAll(),
+      officerIssueTypeRepository.findAll(),
     ]);
 
     const issueTypeNames = new Map(
@@ -81,15 +91,19 @@ export class OfficerReportListService {
 
     const reports = await Promise.all(
       incidents.map(async (incident): Promise<OfficerReportListItem> => {
-        const observations = await observationRepository.findByIncidentId(incident.id);
+        const observations = await officerObservationRepository.findByIncidentId(
+          incident.id,
+        );
         const primaryObservation = [...observations].sort(
           (first, second) =>
-            new Date(first.submittedAt).getTime() - new Date(second.submittedAt).getTime(),
+            new Date(first.submittedAt).getTime() -
+            new Date(second.submittedAt).getTime(),
         )[0];
         const asset = primaryObservation?.imageAssetId
-          ? await assetRepository.findById(primaryObservation.imageAssetId)
+          ? await officerAssetRepository.findById(primaryObservation.imageAssetId)
           : null;
-        const issueType = issueTypeNames.get(incident.issueTypeCode) ?? incident.issueTypeCode;
+        const issueType =
+          issueTypeNames.get(incident.issueTypeCode) ?? incident.issueTypeCode;
         const status = getIncidentStatusPresentation(incident.status);
         const priority = getPriorityPresentation(incident.priorityLevel);
 
@@ -99,7 +113,9 @@ export class OfficerReportListService {
           issueType,
           title: primaryObservation?.title ?? issueType,
           description: primaryObservation?.description,
-          location: primaryObservation?.locationText ?? formatCoordinateLocation(incident),
+          location:
+            primaryObservation?.locationText ??
+            formatCoordinateLocation(incident),
           submittedAt: primaryObservation?.submittedAt ?? incident.createdAt,
           updatedAt: incident.updatedAt,
           thumbnailUrl: resolvePublicAssetUrl(asset?.storagePath),

@@ -58,7 +58,7 @@ export async function submitIncidentResolutionAction(formData: FormData) {
     });
 
     revalidatePath(`/officer/incidents/${result.incidentId}`);
-    revalidatePath("/officer/reports");
+    revalidatePath("/officer", "layout");
 
     return { ok: true as const, message: "Đã gửi kết quả xử lý để kiểm tra." };
   } catch (error) {

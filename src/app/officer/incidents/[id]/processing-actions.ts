@@ -23,7 +23,7 @@ export async function startIncidentProcessingAction(input: unknown) {
     const result = await officerIncidentProcessingService.startProcessing(parsed.data);
 
     revalidatePath(`/officer/incidents/${result.incidentId}`);
-    revalidatePath("/officer/reports");
+    revalidatePath("/officer", "layout");
 
     return { ok: true as const, message: "Đã bắt đầu xử lý phản ánh." };
   } catch (error) {

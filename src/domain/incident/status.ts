@@ -30,7 +30,10 @@ const PRIORITY_PRESENTATION = {
   HIGH: { label: "Cao", tone: "danger" },
   MEDIUM: { label: "Trung bình", tone: "warning" },
   LOW: { label: "Thấp", tone: "success" },
-} as const satisfies Record<Severity, { label: string; tone: IncidentStatusTone }>;
+} as const satisfies Record<
+  Severity,
+  { label: string; tone: IncidentStatusTone }
+>;
 
 export function getIncidentStatusPresentation(
   status: IncidentStatus,

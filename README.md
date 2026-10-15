@@ -57,8 +57,9 @@ The system logic is designed to function 100% without AI. AI features (like sugg
 - After submission, reports of the same known category within 30 metres and 7 days share an incident reference. Missing coordinates and unknown categories stay separate. Each report retains its own photo, description and ID.
 - Demo priority uses report count only: 1–2 LOW, 3–4 MEDIUM, 5+ HIGH. These are prototype rules, not validated danger assessments or verified unique-person counts.
 - Submission and history writes are atomic and retry-safe. Deleting a history copy does not withdraw the submitted demo report. Clearing browser site data removes the demo submissions.
-- Submitted records enter NEW (Chờ duyệt). The complete eight-step officer workflow described in the reference document is not present in this checkout; this inbox is the frontend handoff point for later integration.
-- Verify with `node --experimental-strip-types --test tests/*.test.mjs` and `npm run build`.
+- Submitted records enter NEW (Chờ duyệt) in the browser inbox. The merged officer workflow supports review/rejection, assignment, processing, resolution evidence and completion using a shared server-process demo store. Browser submissions are still separate from that server store; merging these branches does not yet connect the citizen inbox to officer processing.
+- The merged AI branch adds `POST /api/ai/pothole` (server-side Roboflow workflow, configured with `ROBOFLOW_API_KEY`) and an independent YOLO training/evaluation pipeline under `ai/pothole`. The home-page photo flow is not yet wired to this endpoint. Dataset files and trained weights are not included in Git.
+- Verify on Node 24 with `node --test tests/*.test.mjs` and `npm run build`. Integration tests cover the complete officer status sequence and mock AI upstream responses; they do not call Roboflow or train a model.
 
 ### Future integrations
 - Connect AI Adapter to real Gemini API.

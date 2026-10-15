@@ -45,7 +45,13 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
   minute: "2-digit",
 });
 
-function StatusBadge({ label, tone }: { label: string; tone: IncidentStatusTone }) {
+function StatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: IncidentStatusTone;
+}) {
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${TONE_CLASSES[tone]}`}
@@ -104,7 +110,8 @@ export function OfficerReportList({
     [priority, query, reports, sort, status],
   );
 
-  const hasActiveFilters = query !== "" || status !== "ALL" || priority !== "ALL";
+  const hasActiveFilters =
+    query !== "" || status !== "ALL" || priority !== "ALL";
 
   function resetFilters() {
     setQuery("");
@@ -136,7 +143,9 @@ export function OfficerReportList({
             <span className="sr-only">Lọc theo trạng thái</span>
             <select
               value={status}
-              onChange={(event) => setStatus(event.target.value as IncidentStatus | "ALL")}
+              onChange={(event) =>
+                setStatus(event.target.value as IncidentStatus | "ALL")
+              }
               className="min-h-11 w-full rounded-[10px] border border-[#D1D5DB] bg-white px-3 text-sm text-[#374151] outline-none transition focus:border-[#087F46] focus:ring-2 focus:ring-[#087F46]/15"
             >
               <option value="ALL">Tất cả trạng thái</option>
@@ -152,7 +161,9 @@ export function OfficerReportList({
             <span className="sr-only">Lọc theo mức độ ưu tiên</span>
             <select
               value={priority}
-              onChange={(event) => setPriority(event.target.value as Severity | "ALL")}
+              onChange={(event) =>
+                setPriority(event.target.value as Severity | "ALL")
+              }
               className="min-h-11 w-full rounded-[10px] border border-[#D1D5DB] bg-white px-3 text-sm text-[#374151] outline-none transition focus:border-[#087F46] focus:ring-2 focus:ring-[#087F46]/15"
             >
               <option value="ALL">Tất cả ưu tiên</option>
@@ -168,7 +179,9 @@ export function OfficerReportList({
             <span className="sr-only">Sắp xếp danh sách</span>
             <select
               value={sort}
-              onChange={(event) => setSort(event.target.value as OfficerReportSort)}
+              onChange={(event) =>
+                setSort(event.target.value as OfficerReportSort)
+              }
               className="min-h-11 w-full rounded-[10px] border border-[#D1D5DB] bg-white px-3 text-sm text-[#374151] outline-none transition focus:border-[#087F46] focus:ring-2 focus:ring-[#087F46]/15"
             >
               <option value="newest">Mới nhất trước</option>
@@ -179,7 +192,9 @@ export function OfficerReportList({
 
         <div className="mt-4 flex min-h-7 flex-wrap items-center justify-between gap-3 border-t border-[#F3F4F6] pt-4">
           <p aria-live="polite" className="text-sm text-[#6B7280]">
-            Hiển thị <strong className="text-[#111827]">{visibleReports.length}</strong>/{reports.length} phản ánh
+            Hiển thị{" "}
+            <strong className="text-[#111827]">{visibleReports.length}</strong>/
+            {reports.length} sự cố
           </p>
           {hasActiveFilters || sort !== "newest" ? (
             <button
@@ -199,7 +214,9 @@ export function OfficerReportList({
           <span className="mb-4 flex size-12 items-center justify-center rounded-full bg-[#F3F4F6] text-[#6B7280]">
             <FileSearch className="size-6" aria-hidden="true" />
           </span>
-          <h2 className="text-base font-bold text-[#111827]">Không tìm thấy phản ánh</h2>
+          <h2 className="text-base font-bold text-[#111827]">
+            Không tìm thấy phản ánh
+          </h2>
           <p className="mt-1 max-w-sm text-sm leading-5 text-[#6B7280]">
             Thử thay đổi từ khóa hoặc bộ lọc để xem các phản ánh khác.
           </p>
@@ -219,16 +236,23 @@ export function OfficerReportList({
                 <thead className="border-b border-[#E5E7EB] bg-[#F9FAFB] text-xs text-[#6B7280]">
                   <tr>
                     <th className="px-5 py-4 font-semibold">Phản ánh</th>
-                    <th className="px-5 py-4 font-semibold">Khu vực / vị trí</th>
+                    <th className="px-5 py-4 font-semibold">
+                      Khu vực / vị trí
+                    </th>
                     <th className="px-5 py-4 font-semibold">Thời gian gửi</th>
                     <th className="px-5 py-4 font-semibold">Ưu tiên</th>
                     <th className="px-5 py-4 font-semibold">Trạng thái</th>
-                    <th className="px-5 py-4 text-right font-semibold">Thao tác</th>
+                    <th className="px-5 py-4 text-right font-semibold">
+                      Thao tác
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB]">
                   {visibleReports.map((report) => (
-                    <tr key={report.id} className="transition-colors hover:bg-[#F9FAFB]">
+                    <tr
+                      key={report.id}
+                      className="transition-colors hover:bg-[#F9FAFB]"
+                    >
                       <td className="max-w-[330px] px-5 py-4">
                         <div className="flex items-center gap-3">
                           <ReportThumbnail report={report} />
@@ -239,8 +263,12 @@ export function OfficerReportList({
                             >
                               {report.publicCode}
                             </Link>
-                            <p className="mt-0.5 truncate font-medium text-[#374151]">{report.title}</p>
-                            <p className="mt-1 text-xs text-[#6B7280]">{report.issueType}</p>
+                            <p className="mt-0.5 truncate font-medium text-[#374151]">
+                              {report.title}
+                            </p>
+                            <p className="mt-1 text-xs text-[#6B7280]">
+                              {report.issueType}
+                            </p>
                             <div className="mt-1.5">
                               <ReportMeta report={report} />
                             </div>
@@ -249,7 +277,10 @@ export function OfficerReportList({
                       </td>
                       <td className="max-w-[240px] px-5 py-4">
                         <p className="flex items-start gap-1.5 text-xs leading-5 text-[#6B7280]">
-                          <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                          <MapPin
+                            className="mt-0.5 size-3.5 shrink-0"
+                            aria-hidden="true"
+                          />
                           <span>{report.location}</span>
                         </p>
                       </td>
@@ -257,10 +288,16 @@ export function OfficerReportList({
                         {DATE_FORMATTER.format(new Date(report.submittedAt))}
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge label={report.priority.label} tone={report.priority.tone} />
+                        <StatusBadge
+                          label={report.priority.label}
+                          tone={report.priority.tone}
+                        />
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge label={report.status.label} tone={report.status.tone} />
+                        <StatusBadge
+                          label={report.status.label}
+                          tone={report.status.tone}
+                        />
                       </td>
                       <td className="px-5 py-4 text-right">
                         <Link
@@ -268,7 +305,10 @@ export function OfficerReportList({
                           className="inline-flex min-h-9 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-[#087F46] transition-colors hover:bg-[#E8F7EF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087F46]"
                         >
                           Xem chi tiết
-                          <ArrowRight className="size-3.5" aria-hidden="true" />
+                          <ArrowRight
+                            className="size-3.5"
+                            aria-hidden="true"
+                          />
                         </Link>
                       </td>
                     </tr>
@@ -290,19 +330,29 @@ export function OfficerReportList({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#111827]">{report.publicCode}</p>
+                        <p className="text-sm font-bold text-[#111827]">
+                          {report.publicCode}
+                        </p>
                         <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-[#374151]">
                           {report.title}
                         </p>
                       </div>
-                      <StatusBadge label={report.status.label} tone={report.status.tone} />
+                      <StatusBadge
+                        label={report.status.label}
+                        tone={report.status.tone}
+                      />
                     </div>
-                    <p className="mt-1 text-xs text-[#6B7280]">{report.issueType}</p>
+                    <p className="mt-1 text-xs text-[#6B7280]">
+                      {report.issueType}
+                    </p>
                   </div>
                 </div>
 
                 <p className="mt-3 flex items-start gap-1.5 text-xs leading-5 text-[#6B7280]">
-                  <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  <MapPin
+                    className="mt-0.5 size-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
                   <span>{report.location}</span>
                 </p>
 
@@ -310,7 +360,10 @@ export function OfficerReportList({
                   <span className="text-[11px] text-[#9CA3AF]">
                     {DATE_FORMATTER.format(new Date(report.submittedAt))}
                   </span>
-                  <StatusBadge label={report.priority.label} tone={report.priority.tone} />
+                  <StatusBadge
+                    label={report.priority.label}
+                    tone={report.priority.tone}
+                  />
                 </div>
                 <div className="mt-2">
                   <ReportMeta report={report} />

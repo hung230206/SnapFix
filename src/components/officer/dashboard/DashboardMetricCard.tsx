@@ -3,17 +3,49 @@ import {
   CheckCircle2,
   Clock3,
   FileCheck2,
-  FileText,
+  Files,
+  MapPinned,
 } from "lucide-react";
 
-import type { DashboardMetric, DashboardMetricKey } from "@/services/officer-dashboard-service";
+import type {
+  DashboardMetric,
+  DashboardMetricKey,
+} from "@/services/officer-dashboard-service";
 
-const METRIC_STYLES: Record<DashboardMetricKey, { icon: typeof FileText; iconClass: string; iconBackground: string }> = {
-  total: { icon: FileText, iconClass: "text-blue-600", iconBackground: "bg-blue-100" },
-  pending: { icon: AlertTriangle, iconClass: "text-red-600", iconBackground: "bg-red-100" },
-  processing: { icon: Clock3, iconClass: "text-amber-600", iconBackground: "bg-amber-100" },
-  awaitingConfirmation: { icon: FileCheck2, iconClass: "text-violet-600", iconBackground: "bg-violet-100" },
-  completed: { icon: CheckCircle2, iconClass: "text-emerald-600", iconBackground: "bg-emerald-100" },
+const METRIC_STYLES: Record<
+  DashboardMetricKey,
+  { icon: typeof Files; iconClass: string; iconBackground: string }
+> = {
+  incidents: {
+    icon: MapPinned,
+    iconClass: "text-blue-600",
+    iconBackground: "bg-blue-100",
+  },
+  reports: {
+    icon: Files,
+    iconClass: "text-violet-600",
+    iconBackground: "bg-violet-100",
+  },
+  pending: {
+    icon: AlertTriangle,
+    iconClass: "text-red-600",
+    iconBackground: "bg-red-100",
+  },
+  processing: {
+    icon: Clock3,
+    iconClass: "text-amber-600",
+    iconBackground: "bg-amber-100",
+  },
+  awaitingConfirmation: {
+    icon: FileCheck2,
+    iconClass: "text-indigo-600",
+    iconBackground: "bg-indigo-100",
+  },
+  completed: {
+    icon: CheckCircle2,
+    iconClass: "text-emerald-600",
+    iconBackground: "bg-emerald-100",
+  },
 };
 
 export function DashboardMetricCard({ metric }: { metric: DashboardMetric }) {
@@ -26,12 +58,19 @@ export function DashboardMetricCard({ metric }: { metric: DashboardMetric }) {
         <p className="text-[13px] font-semibold leading-5 text-[#6B7280] md:text-sm">
           {metric.label}
         </p>
-        <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${style.iconBackground}`}>
-          <Icon className={`size-[18px] ${style.iconClass}`} aria-hidden="true" />
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-full ${style.iconBackground}`}
+        >
+          <Icon
+            className={`size-[18px] ${style.iconClass}`}
+            aria-hidden="true"
+          />
         </span>
       </div>
       <div>
-        <p className="text-3xl font-bold tracking-tight text-[#111827]">{metric.value}</p>
+        <p className="text-3xl font-bold tracking-tight text-[#111827]">
+          {metric.value}
+        </p>
         <p className="mt-1 text-[11px] leading-4 text-[#9CA3AF] md:text-xs">
           {metric.description}
         </p>

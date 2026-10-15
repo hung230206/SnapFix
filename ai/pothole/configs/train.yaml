@@ -1,0 +1,12 @@
+model: yolo11n.pt
+epochs: 80
+batch: 4
+imgsz: 640
+device: auto
+workers: 2
+amp: true
+patience: 15
+seed: 42
+cache: false
+project: ../runs/detect
+name: yolo11n-pothole-1class

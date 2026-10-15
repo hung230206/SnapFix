@@ -7,6 +7,8 @@ import { IncidentMapPreview } from "@/components/officer/dashboard/IncidentMapPr
 import { RecentIncidents } from "@/components/officer/dashboard/RecentIncidents";
 import { officerDashboardService } from "@/services/officer-dashboard-service";
 
+export const dynamic = "force-dynamic";
+
 export default async function OfficerDashboardPage() {
   const dashboard = await officerDashboardService.getDashboardSnapshot();
 
@@ -22,18 +24,20 @@ export default async function OfficerDashboardPage() {
             Tổng quan tiếp nhận
           </h1>
           <p className="mt-1 max-w-3xl text-[13px] leading-5 text-[#6B7280] md:text-sm">
-            Theo dõi tình hình phản ánh và tiến độ xử lý trong giao diện mô phỏng
-            dành cho đơn vị tiếp nhận.
+            Số liệu được tổng hợp từ cùng repository với danh sách, bản đồ và
+            luồng xử lý sự cố.
           </p>
         </div>
-
-        <div className="flex min-h-11 items-center gap-2 self-start rounded-[12px] border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] shadow-[0_2px_4px_rgba(0,0,0,0.02)] md:self-auto">
+        <div className="flex min-h-11 items-center gap-2 self-start rounded-[12px] border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] md:self-auto">
           <CalendarDays className="size-4 text-[#087F46]" aria-hidden="true" />
           <span>7 ngày gần nhất</span>
         </div>
       </section>
 
-      <section aria-label="Chỉ số tổng quan" className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+      <section
+        aria-label="Chỉ số tổng quan"
+        className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6"
+      >
         {dashboard.metrics.map((metric) => (
           <DashboardMetricCard key={metric.key} metric={metric} />
         ))}
@@ -43,6 +47,7 @@ export default async function OfficerDashboardPage() {
         dailyReports={dashboard.dailyReports}
         issueTypeDistribution={dashboard.issueTypeDistribution}
         totalIncidents={dashboard.totalIncidents}
+        totalIndependentReports={dashboard.totalIndependentReports}
       />
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
@@ -51,8 +56,8 @@ export default async function OfficerDashboardPage() {
       </section>
 
       <p className="rounded-[12px] border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3 text-xs leading-5 text-[#166534]">
-        Dữ liệu trên dashboard hiện là dữ liệu mô phỏng. AI và hệ thống chỉ hỗ trợ
-        tổng hợp thông tin; cán bộ vẫn là người quyết định các bước nghiệp vụ.
+        Đây là dữ liệu mô phỏng. “Tổng sự cố” đếm Incident riêng biệt; “Lượt
+        phản ánh” là tổng independentReportCount của các Incident đó.
       </p>
     </div>
   );

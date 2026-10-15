@@ -24,7 +24,7 @@ export async function reviewIncidentAction(input: unknown) {
     const result = await officerIncidentReviewService.reviewIncident(parsed.data);
 
     revalidatePath(`/officer/incidents/${result.incidentId}`);
-    revalidatePath("/officer/reports");
+    revalidatePath("/officer", "layout");
 
     return {
       ok: true as const,

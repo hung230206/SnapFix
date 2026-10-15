@@ -22,7 +22,7 @@ export async function confirmIncidentCompletionAction(input: unknown) {
     const result = await officerIncidentCompletionService.confirmCompletion(parsed.data);
 
     revalidatePath(`/officer/incidents/${result.incidentId}`);
-    revalidatePath("/officer/reports");
+    revalidatePath("/officer", "layout");
 
     return { ok: true as const, message: "Đã xác nhận hoàn thành phản ánh." };
   } catch (error) {

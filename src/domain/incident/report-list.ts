@@ -78,7 +78,8 @@ export function filterAndSortOfficerReports(
   filters: OfficerReportListFilters,
 ): OfficerReportListItem[] {
   const filteredReports = reports.filter((report) => {
-    const matchesStatus = filters.status === "ALL" || report.status.code === filters.status;
+    const matchesStatus =
+      filters.status === "ALL" || report.status.code === filters.status;
     const matchesPriority =
       filters.priority === "ALL" || report.priority.code === filters.priority;
 
@@ -88,13 +89,17 @@ export function filterAndSortOfficerReports(
   return [...filteredReports].sort((first, second) => {
     if (filters.sort === "priority") {
       const priorityDifference =
-        PRIORITY_WEIGHT[second.priority.code] - PRIORITY_WEIGHT[first.priority.code];
+        PRIORITY_WEIGHT[second.priority.code] -
+        PRIORITY_WEIGHT[first.priority.code];
 
       if (priorityDifference !== 0) {
         return priorityDifference;
       }
     }
 
-    return new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime();
+    return (
+      new Date(second.submittedAt).getTime() -
+      new Date(first.submittedAt).getTime()
+    );
   });
 }

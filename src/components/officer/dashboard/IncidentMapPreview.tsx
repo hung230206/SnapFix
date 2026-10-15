@@ -29,15 +29,12 @@ export function IncidentMapPreview({ points }: { points: OfficerMapPoint[] }) {
     <article>
       <div className="mb-4">
         <h2 className="text-[17px] font-bold text-[#111827]">Preview bản đồ</h2>
-        <p className="mt-1 text-xs text-[#9CA3AF]">Vị trí các phản ánh có tọa độ</p>
+        <p className="mt-1 text-xs text-[#9CA3AF]">
+          Vị trí các sự cố có tọa độ
+        </p>
       </div>
-
       <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-2 shadow-[0_2px_10px_rgba(15,23,42,0.02)]">
-        <div
-          className="relative h-[310px] overflow-hidden rounded-[12px] bg-[#E8F0EA]"
-          aria-label={`Bản đồ mô phỏng có ${points.length} vị trí phản ánh`}
-          role="img"
-        >
+        <div className="relative h-[310px] overflow-hidden rounded-[12px] bg-[#E8F0EA]">
           <div
             className="absolute inset-0 opacity-70"
             style={{
@@ -46,41 +43,24 @@ export function IncidentMapPreview({ points }: { points: OfficerMapPoint[] }) {
               backgroundSize: "32px 32px",
             }}
           />
-          <div className="absolute left-4 top-4 z-10 rounded-[10px] border border-white/80 bg-white/90 px-3 py-2 text-xs font-semibold text-[#374151] shadow-sm backdrop-blur-sm">
-            Khu vực mô phỏng
-          </div>
-
           {points.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-[#64748B]">
               <MapPin className="mb-2 size-8" aria-hidden="true" />
-              <span className="text-sm font-medium">Chưa có tọa độ để hiển thị</span>
+              <span className="text-sm font-medium">Chưa có tọa độ</span>
             </div>
           ) : (
-            points.map((point) => {
-              const left = normalize(point.lng, minLng, maxLng);
-              const top = 100 - normalize(point.lat, minLat, maxLat);
-
-              return (
-                <span
-                  key={point.id}
-                  className={`group absolute z-10 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white shadow-md ${MARKER_CLASSES[point.statusTone]}`}
-                  style={{ left: `${left}%`, top: `${top}%` }}
-                  title={`${point.publicCode} · ${point.issueType} · ${point.statusLabel}`}
-                >
-                  <span className="sr-only">
-                    {point.publicCode}, {point.issueType}, {point.statusLabel}
-                  </span>
-                </span>
-              );
-            })
+            points.map((point) => (
+              <span
+                key={point.id}
+                className={`absolute z-10 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white shadow-md ${MARKER_CLASSES[point.statusTone]}`}
+                style={{
+                  left: `${normalize(point.lng, minLng, maxLng)}%`,
+                  top: `${100 - normalize(point.lat, minLat, maxLat)}%`,
+                }}
+                title={`${point.publicCode} · ${point.issueType} · ${point.statusLabel}`}
+              />
+            ))
           )}
-
-          <div className="absolute bottom-4 left-4 right-4 z-10 flex flex-wrap gap-2 rounded-[10px] bg-white/90 p-2 text-[10px] text-[#4B5563] shadow-sm backdrop-blur-sm">
-            <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-amber-500" /> Chờ duyệt/đang xử lý</span>
-            <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-blue-500" /> Đã tiếp nhận/chờ xác nhận</span>
-            <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-emerald-500" /> Hoàn thành</span>
-            <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-red-500" /> Cần chú ý</span>
-          </div>
         </div>
       </div>
     </article>

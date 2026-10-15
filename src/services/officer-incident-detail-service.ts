@@ -17,15 +17,17 @@ import {
   getPriorityPresentation,
 } from "@/domain/incident/status";
 import {
-  DemoAssetRepository,
-  DemoDepartmentRepository,
   DemoIssueQuestionOptionRepository,
   DemoIssueQuestionRepository,
-  DemoIssueTypeRepository,
-  DemoObservationEvidenceRepository,
-  DemoObservationRepository,
-  DemoUserRepository,
 } from "@/lib/repositories/DemoRepositories";
+import {
+  officerAssetRepository,
+  officerDepartmentRepository,
+  officerIssueTypeRepository,
+  officerObservationEvidenceRepository,
+  officerObservationRepository,
+  officerUserRepository,
+} from "@/lib/repositories/officer-repositories";
 import {
   officerIncidentEventRepository,
   officerIncidentRepository,
@@ -125,14 +127,14 @@ export type OfficerIncidentDetail = {
 };
 
 const incidentRepository = officerIncidentRepository;
-const issueTypeRepository = new DemoIssueTypeRepository();
-const observationRepository = new DemoObservationRepository();
-const observationEvidenceRepository = new DemoObservationEvidenceRepository();
-const assetRepository = new DemoAssetRepository();
+const issueTypeRepository = officerIssueTypeRepository;
+const observationRepository = officerObservationRepository;
+const observationEvidenceRepository = officerObservationEvidenceRepository;
+const assetRepository = officerAssetRepository;
 const eventRepository = officerIncidentEventRepository;
 const resolutionRepository = officerResolutionRepository;
-const departmentRepository = new DemoDepartmentRepository();
-const userRepository = new DemoUserRepository();
+const departmentRepository = officerDepartmentRepository;
+const userRepository = officerUserRepository;
 const questionRepository = new DemoIssueQuestionRepository();
 const questionOptionRepository = new DemoIssueQuestionOptionRepository();
 
