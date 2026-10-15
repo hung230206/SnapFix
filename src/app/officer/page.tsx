@@ -8,6 +8,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useReports } from "@/lib/store/ReportContext";
 import { format, parseISO } from "date-fns";
+import { CitizenInbox } from "@/components/report/CitizenInbox";
 
 export default function OfficerDashboard() {
   const { reports } = useReports();
@@ -79,6 +80,7 @@ export default function OfficerDashboard() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto">
+      <CitizenInbox />
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

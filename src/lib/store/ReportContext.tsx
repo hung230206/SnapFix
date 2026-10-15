@@ -25,7 +25,7 @@ export type Report = {
   analysis: AnalysisData | null;
   editedDraft: string;
   receivingAgency: { name: string; reportUrl: string };
-  status: "Cần xử lý" | "Đã phân công" | "Đang xử lý" | "Đã xử lý";
+  status: "Đã gửi" | "Cần xử lý" | "Đã phân công" | "Đang xử lý" | "Đã xử lý";
   submittedAt: string | null;
   assignee?: string;
   logs: { action: string; from: string; to: string; actor: string; createdAt: string }[];

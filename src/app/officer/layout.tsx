@@ -42,7 +42,7 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
       <div className={`fixed inset-y-0 left-0 w-[260px] bg-white z-50 transform transition-transform duration-300 md:hidden flex flex-col shadow-xl ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-4 border-b border-[#E5E7EB] flex justify-between items-center bg-[#087F46] text-white">
           <div>
-            <h2 className="font-bold text-lg leading-tight">SnapFix CT</h2>
+            <h2 className="font-bold text-lg leading-tight">SnapFix</h2>
             <p className="text-xs opacity-80">UBND Quận Ninh Kiều</p>
           </div>
           <button onClick={() => setDrawerOpen(false)} className="p-2 text-white/80 rounded-full hover:bg-white/10">
@@ -85,7 +85,7 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
       {/* --------------------------------------------------- */}
       <aside className="hidden md:flex flex-col w-[240px] bg-[#056638] text-white fixed inset-y-0 left-0 z-20 shadow-xl">
         <div className="p-6">
-          <h2 className="font-bold text-xl leading-tight tracking-tight">SnapFix CT</h2>
+          <h2 className="font-bold text-xl leading-tight tracking-tight">SnapFix</h2>
           <p className="text-xs text-green-200 mt-1">Hệ thống tiếp nhận phản ánh</p>
         </div>
         <nav className="flex-1 overflow-y-auto px-4 flex flex-col gap-1">
@@ -131,7 +131,7 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
             <div className="w-8 h-8 bg-[#E8F7EF] rounded-[8px] flex items-center justify-center">
               <Camera className="w-5 h-5 text-[#087F46]" />
             </div>
-            <span className="font-bold text-[#087F46] text-lg">SnapFix CT</span>
+            <span className="font-bold text-[#087F46] text-lg">SnapFix</span>
           </div>
           <div className="flex items-center gap-1">
             <button className="p-2 text-gray-500 rounded-full hover:bg-gray-100 relative">

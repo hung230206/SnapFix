@@ -1,0 +1,82 @@
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { CitizenReport } from '@/domain/citizen-report';
+import { currentSubmission } from '@/domain/citizen-mvp';
+
+interface CitizenHistoryDB extends DBSchema {
+  citizen_submissions: { key: string; value: CitizenReport };
+  citizen_reports: {
+    key: string;
+    value: CitizenReport;
+    indexes: { 'by-createdAt': string };
+  };
+}
+
+let dbPromise: Promise<IDBPDatabase<CitizenHistoryDB>> | null = null;
+
+export function getCitizenHistoryDB() {
+  if (!dbPromise && typeof window !== 'undefined') {
+    dbPromise = openDB<CitizenHistoryDB>('snapfix-citizen-history-db', 2, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains('citizen_submissions')) db.createObjectStore('citizen_submissions', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('citizen_reports')) {
+        const store = db.createObjectStore('citizen_reports', {
+          keyPath: 'id',
+        });
+        store.createIndex('by-createdAt', 'createdAt');
+        }
+      },
+    }).catch(error => {
+      dbPromise = null;
+      throw error;
+    });
+  }
+  return dbPromise as Promise<IDBPDatabase<CitizenHistoryDB>>;
+}
+
+export async function countCitizenReports(): Promise<number> {
+  const db = await getCitizenHistoryDB();
+  return db.count('citizen_reports');
+}
+
+export async function clearCitizenHistory(): Promise<void> {
+  const db = await getCitizenHistoryDB();
+  await db.clear('citizen_reports');
+}
+
+export async function saveCitizenReport(report: CitizenReport): Promise<void> {
+  const db = await getCitizenHistoryDB();
+  await db.put('citizen_reports', report);
+}
+
+export async function getCitizenReport(id: string): Promise<CitizenReport | undefined> {
+  const db = await getCitizenHistoryDB();
+  const report = await db.get('citizen_reports', id);
+  return report ? currentSubmission(report, await db.getAll('citizen_submissions')) : undefined;
+}
+
+export async function getAllCitizenReports(): Promise<CitizenReport[]> {
+  const db = await getCitizenHistoryDB();
+  const reports = await db.getAllFromIndex('citizen_reports', 'by-createdAt');
+  const submitted = await db.getAll('citizen_submissions');
+  return reports.map(report => currentSubmission(report, submitted));
+}
+
+export async function deleteCitizenReport(id: string): Promise<void> {
+  const db = await getCitizenHistoryDB();
+  await db.delete('citizen_reports', id);
+}
+
+export async function updateCitizenReportStatus(
+  id: string, 
+  status: CitizenReport['status'], 
+  statusSource: CitizenReport['statusSource']
+): Promise<void> {
+  const db = await getCitizenHistoryDB();
+  const report = await db.get('citizen_reports', id);
+  if (report) {
+    report.status = status;
+    report.statusSource = statusSource;
+    report.updatedAt = new Date().toISOString();
+    await db.put('citizen_reports', report);
+  }
+}
