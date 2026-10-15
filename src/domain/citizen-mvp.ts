@@ -1,4 +1,5 @@
 import type { CitizenReport } from "./citizen-report";
+import { classificationFor } from "./pothole-recognition";
 
 export function demoPriority(count: number) {
   return count >= 5 ? "HIGH" : count >= 3 ? "MEDIUM" : "LOW";
@@ -27,7 +28,7 @@ export function prepareSubmission(report: CitizenReport, submitted: CitizenRepor
   const incidentId = nearest?.submission?.incidentId ?? `SF-${report.id}`;
   const reportCount = submitted.filter(item => item.submission?.incidentId === incidentId).length + 1;
   return { ...report, status: "Chờ duyệt", statusSource: "system", submission: {
-    incidentId, submittedAt: now, workflowStatus: "NEW", confidence: null, classificationSource: "manual",
+    incidentId, submittedAt: now, workflowStatus: "NEW", ...classificationFor(report.category, report.recognition),
     reportCount, priority: demoPriority(reportCount),
     priorityReason: "Quy tắc demo theo lượt phản ánh: 1–2 thấp, 3–4 trung bình, từ 5 cao. Không đánh giá mức nguy hiểm từ ảnh.",
   } };

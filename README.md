@@ -53,12 +53,12 @@ The system logic is designed to function 100% without AI. AI features (like sugg
 ## Next Steps / Future Work
 ### Citizen MVP frontend demo
 - The home page now submits independent reports to IndexedDB; `/officer/reports` and the officer dashboard read these same submissions. This is local browser data, not delivery to a real authority.
-- No YOLO inference is performed. Citizens confirm the category manually; classification confidence is unavailable. The image step no longer asks for danger/severity.
+- The home-page photo flow calls `/api/ai/pothole` after location confirmation. A pothole detection with confidence at least 0.5 suggests the pothole category for the citizen to confirm; weaker/empty results and service failures keep manual reporting available. AI does not assess danger/severity. Original AI confidence is retained separately when a citizen changes the category.
 - After submission, reports of the same known category within 30 metres and 7 days share an incident reference. Missing coordinates and unknown categories stay separate. Each report retains its own photo, description and ID.
 - Demo priority uses report count only: 1–2 LOW, 3–4 MEDIUM, 5+ HIGH. These are prototype rules, not validated danger assessments or verified unique-person counts.
 - Submission and history writes are atomic and retry-safe. Deleting a history copy does not withdraw the submitted demo report. Clearing browser site data removes the demo submissions.
 - Submitted records enter NEW (Chờ duyệt) in the browser inbox. The merged officer workflow supports review/rejection, assignment, processing, resolution evidence and completion using a shared server-process demo store. Browser submissions are still separate from that server store; merging these branches does not yet connect the citizen inbox to officer processing.
-- The merged AI branch adds `POST /api/ai/pothole` (server-side Roboflow workflow, configured with `ROBOFLOW_API_KEY`) and an independent YOLO training/evaluation pipeline under `ai/pothole`. The home-page photo flow is not yet wired to this endpoint. Dataset files and trained weights are not included in Git.
+- `POST /api/ai/pothole` uses the server-side Roboflow workflow and requires `ROBOFLOW_API_KEY` in `.env.local` (restart the server after configuration). Never expose the key with a `NEXT_PUBLIC_` prefix. The separate YOLO training/evaluation pipeline under `ai/pothole` is not the model used by this workflow; dataset files and trained weights are not included in Git.
 - Verify on Node 24 with `node --test tests/*.test.mjs` and `npm run build`. Integration tests cover the complete officer status sequence and mock AI upstream responses; they do not call Roboflow or train a model.
 
 ### Future integrations

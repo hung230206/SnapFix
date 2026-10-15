@@ -110,6 +110,8 @@ export async function POST(request: Request): Promise<Response> {
     return errorResponse("The uploaded file must have an image MIME type.", 415);
   }
 
+  if (image.size > 20 * 1024 * 1024) return errorResponse("Image exceeds 20 MB.", 413);
+
   const apiKey = process.env.ROBOFLOW_API_KEY?.trim();
   if (!apiKey) {
     return errorResponse("Pothole analysis service is not configured.", 500);
@@ -145,6 +147,7 @@ export async function POST(request: Request): Promise<Response> {
         },
       }),
       cache: "no-store",
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)]),
     });
   } catch {
     return errorResponse("Pothole analysis service is unavailable.", 502);
