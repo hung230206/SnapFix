@@ -3,6 +3,7 @@ import { X, Copy, Download, Edit3, Trash2, Info } from "lucide-react";
 import { CitizenReport, ReportStatus } from "@/domain/citizen-report";
 import { deleteCitizenReport, updateCitizenReportStatus } from "@/lib/repositories/citizen-history";
 import styles from "./ReportHistory.module.css";
+import { RecognitionSummary } from "./RecognitionSummary";
 
 export function ReportHistoryDetail({ 
   report, 
@@ -79,6 +80,7 @@ export function ReportHistoryDetail({
           
           <div className={styles.detailSection}>
             <h3>Thông tin sự cố</h3>
+            <RecognitionSummary recognition={report.recognition} category={report.category} />
             <div className={styles.detailRow}>
               <div>
                 <strong>{report.category}</strong><br/>

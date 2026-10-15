@@ -1,6 +1,7 @@
 export type ReportStatus = "Đã chuẩn bị" | "Chờ duyệt" | "Đã mở kênh tiếp nhận" | "Đang xử lý" | "Đã xử lý";
 
 export interface CitizenReport {
+  recognition?: import('./pothole-recognition').PotholeRecognition;
   id: string;
   category: string;
   severity: "low" | "medium" | "high";
@@ -32,7 +33,7 @@ export interface CitizenReport {
     submittedAt: string;
     workflowStatus: "NEW";
     confidence: number | null;
-    classificationSource: "manual";
+    classificationSource: "manual" | "ai_confirmed";
     reportCount: number;
     priority: "LOW" | "MEDIUM" | "HIGH";
     priorityReason: string;

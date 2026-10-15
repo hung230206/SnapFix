@@ -2,8 +2,10 @@ import { Copy, Download, RefreshCcw, ArrowLeft, Info, Send, Building2 } from "lu
 import styles from "./ReportConfirmation.module.css";
 import Link from "next/link";
 import type { CitizenReport } from "@/domain/citizen-report";
+import { RecognitionSummary } from "./RecognitionSummary";
 
 interface ReportConfirmationProps {
+  recognition?: CitizenReport['recognition'];
   submission?: CitizenReport['submission'];
   onNewReport?: () => void;
   preview: string | null;
@@ -44,6 +46,7 @@ export function ReportConfirmation({
   submitting = false,
   submission,
   onNewReport,
+  recognition,
 }: ReportConfirmationProps) {
   const isEdited = draft !== originalDraft;
   const isEmpty = draft.trim().length === 0;
@@ -102,6 +105,7 @@ export function ReportConfirmation({
         {preview && <img src={preview} alt="Ảnh sự cố đang soạn phản ánh" />}
         <div className={styles.summaryInfo}>
           <h2>{category}</h2>
+          <RecognitionSummary recognition={recognition} category={category} />
           <p>{locationLabel}</p>
           <p>{timeLabel}</p>
           <button className={styles.textButton} onClick={onEditInfo}>
@@ -141,7 +145,7 @@ export function ReportConfirmation({
 
       <p className={styles.disclaimer}>
         <Info size={18} />
-        <span>Mỗi lần gửi tạo một báo cáo độc lập. Bản demo lưu trên trình duyệt, đối chiếu báo cáo cùng loại gần vị trí rồi cập nhật lượt phản ánh và ưu tiên. Chưa có AI hoặc gửi tới cơ quan thật.</span>
+        <span>Mỗi lần gửi tạo một báo cáo độc lập. Bản demo lưu trên trình duyệt, đối chiếu báo cáo cùng loại gần vị trí rồi cập nhật lượt phản ánh và ưu tiên. Chưa gửi tới cơ quan thật.</span>
       </p>
 
       <div className={styles.actions}>

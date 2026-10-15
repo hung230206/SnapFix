@@ -1,6 +1,7 @@
+import './helpers/typescript-loader.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { prepareSubmission, currentSubmission } from '../src/domain/citizen-mvp.ts';
+const { prepareSubmission, currentSubmission } = await import('../src/domain/citizen-mvp.ts');
 
 const draft = (id, lat = 0, lng = 0, category = 'Ổ gà') => ({ id, category, location: { lat, lng, text: '' }, status: 'Đã chuẩn bị' });
 

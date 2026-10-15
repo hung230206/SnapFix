@@ -10,6 +10,7 @@ export type LocationData = {
 };
 
 export type AnalysisData = {
+  recognition?: import('@/domain/pothole-recognition').PotholeRecognition;
   category: string;
   severity: "low" | "medium" | "high";
   reason: string;

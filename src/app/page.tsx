@@ -13,11 +13,14 @@ import { useCitizenDraft } from "@/lib/store/CitizenDraftContext";
 import type { CitizenReport } from "@/domain/citizen-report";
 import styles from "./home.module.css";
 import { submitCitizenReport } from "@/services/citizen-submission-service";
+import { analyzePotholeImage } from "@/services/pothole-analysis-client";
+import { POTHOLE_CATEGORY } from "@/domain/pothole-recognition";
+import { RecognitionSummary } from "@/components/report/RecognitionSummary";
 
 type Screen = "home" | "analysis" | "report";
 type Phase = "reading" | "converting" | "location" | "analyzing" | "ready" | "error";
 const categories = ["Ổ gà, hư mặt đường", "Ngập nước", "Đèn đường hỏng", "Rác thải", "Khác / không nhận diện được"];
-const disclaimer = "MVP thử nghiệm: phản ánh được lưu trên trình duyệt và hiển thị trong danh sách cán bộ demo. Chưa kết nối AI hay cơ quan tiếp nhận thật.";
+const disclaimer = "Ảnh sẽ được gửi đến dịch vụ AI Roboflow để hỗ trợ nhận diện ổ gà. Phản ánh vẫn lưu trên trình duyệt trong bản demo, chưa gửi tới cơ quan thật.";
 
 function locationLabel(location: LocationData) {
   return location.text || (location.lat != null && location.lng != null ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "Chưa có vị trí");
@@ -72,6 +75,7 @@ function CitizenHome() {
   const libraryInput = useRef<HTMLInputElement>(null);
   const gpsRequest = useRef<ReturnType<typeof requestGeolocation> | null>(null);
   const generation = useRef(0);
+  const analysisRequest = useRef<AbortController | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const { preferences, isLoaded } = useUserPreferences();
 
@@ -92,7 +96,7 @@ function CitizenHome() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [screen]);
 
-  useEffect(() => () => { generation.current += 1; }, []);
+  useEffect(() => () => { generation.current += 1; analysisRequest.current?.abort(); }, []);
 
   useEffect(() => {
     const editId = searchParams?.get("edit");
@@ -108,7 +112,8 @@ function CitizenHome() {
             category: report.category,
             severity: report.severity,
             reason: "Đang xem lại báo cáo đã lưu",
-            confidence: 0,
+            confidence: report.recognition?.confidence ?? 0,
+            recognition: report.recognition,
             draft: report.originalDraft
           });
           setImageBlob(report.imageBlob);
@@ -131,6 +136,7 @@ function CitizenHome() {
 
   function reset() {
     generation.current += 1;
+    analysisRequest.current?.abort();
     setScreen("home");
     setPreview(null);
     setAnalysis(null);
@@ -150,21 +156,25 @@ function CitizenHome() {
     if (searchParams.has("edit")) router.replace("/");
   }
 
-  async function analyze(loc: LocationData, capturedAt: string, token = generation.current) {
+  async function analyze(loc: LocationData, capturedAt: string, token = generation.current, photo = imageBlob, preserveEdited = false) {
+    if (!photo) return;
+    analysisRequest.current?.abort();
+    const controller = new AbortController();
+    analysisRequest.current = controller;
     setPhase("analyzing");
     setError("");
     try {
-      // Demo only: no image recognition service is configured yet.
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      if (token !== generation.current) return;
-      const category = categories[4];
+      const recognition = await analyzePotholeImage(photo, controller.signal);
+      if (token !== generation.current || controller.signal.aborted) return;
+      const category = recognition.status === "detected" ? POTHOLE_CATEGORY : categories[4];
       const text = draftFor(category, loc, capturedAt);
-      setAnalysis({ category, severity: "low", reason: "YOLO chưa kết nối. Loại sự cố do bạn xác nhận; confidence chưa có. Ưu tiên chỉ được cập nhật sau khi gửi dựa trên số lượt phản ánh.", confidence: 0, draft: text });
-      setDraft(text);
+      setAnalysis({ category, severity: "low", reason: recognition.message, confidence: recognition.confidence ?? 0, recognition, draft: text });
+      if (!preserveEdited || draft === originalDraft) setDraft(text);
+      else setNotice("Đã nhận diện lại. Hãy kiểm tra nội dung phản ánh bạn đã chỉnh sửa.");
       setOriginalDraft(text);
       setPhase("ready");
     } catch {
-      if (token !== generation.current) return;
+      if (token !== generation.current || controller.signal.aborted) return;
       setPhase("error");
       setError("Chưa thể phân tích ảnh. Vui lòng thử lại.");
     }
@@ -186,6 +196,7 @@ function CitizenHome() {
     if (!selectedFile) return;
     const capturedNow = new Date().toISOString();
     const token = ++generation.current;
+    analysisRequest.current?.abort();
     let file: File;
     try {
       file = await prepareImageFile(selectedFile);
@@ -203,6 +214,8 @@ function CitizenHome() {
     setScreen("analysis");
     setPhase("reading");
     setAnalysis(null);
+    setDraft("");
+    setOriginalDraft("");
     setSavedReport(null);
     keepDraft(null);
     setEditingLocation(false);
@@ -229,7 +242,7 @@ function CitizenHome() {
       setTime(capturedAt);
       setTimeFromExif(imageSource === "library" && meta.timeFromExif);
       if (loc.type === "manual" && !loc.text) setPhase("location");
-      else await analyze(loc, capturedAt, token);
+      else await analyze(loc, capturedAt, token, displayFile);
     } catch (error) {
       if (token !== generation.current) return;
       setPhase("error");
@@ -292,6 +305,7 @@ function CitizenHome() {
         ...savedReport,
         id,
         category: analysis.category,
+        recognition: analysis.recognition,
         severity: analysis.severity,
         imageBlob,
         location: { ...location, lat: location.lat ?? undefined, lng: location.lng ?? undefined },
@@ -345,7 +359,7 @@ function CitizenHome() {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        {screen !== "home" && <button className={styles.iconButton} aria-label={screen === "report" ? "Quay lại kết quả" : "Về trang chủ"} onClick={() => { setScreen(screen === "report" ? "analysis" : "home"); setNotice(""); }}><ArrowLeft size={22} /></button>}
+        {screen !== "home" && <button className={styles.iconButton} aria-label={screen === "report" ? "Quay lại kết quả" : "Về trang chủ"} onClick={() => { if (screen === "report") setScreen("analysis"); else reset(); setNotice(""); }}><ArrowLeft size={22} /></button>}
         <div className={styles.brand}><span>SnapFix</span></div>
         <span className={styles.headerNote}>Một tấm ảnh, một thay đổi</span>
       </header>
@@ -403,20 +417,21 @@ function CitizenHome() {
               </div>
               <div className={styles.assistantLabel}><Sparkles size={18} /> Trợ lý SnapFix <span>Bản demo</span></div>
               <div aria-live="polite">
-                {busy && <div className={styles.loading}><LoaderCircle className={styles.spinner} size={22} /><div><strong>{phase === "converting" ? "Đang xử lý ảnh…" : phase === "reading" ? "Đang xem ảnh của bạn…" : "Đang chuẩn bị kết quả minh họa…"}</strong><p>{phase === "converting" ? "Đang chuyển HEIC sang JPEG. Quá trình này có thể mất vài giây." : phase === "reading" ? "Kiểm tra thông tin vị trí và thời gian trong ảnh." : "AI chưa được kết nối. Bạn sẽ tự xác nhận thông tin sự cố."}</p></div></div>}
+                {busy && <div className={styles.loading}><LoaderCircle className={styles.spinner} size={22} /><div><strong>{phase === "converting" ? "Đang xử lý ảnh…" : phase === "reading" ? "Đang xem ảnh của bạn…" : "AI đang nhận diện ổ gà…"}</strong><p>{phase === "converting" ? "Đang chuyển HEIC sang JPEG. Quá trình này có thể mất vài giây." : phase === "reading" ? "Kiểm tra thông tin vị trí và thời gian trong ảnh." : "Bạn sẽ kiểm tra kết quả trước khi gửi phản ánh."}</p></div></div>}
                 {phase === "location" && locationEditor}
                 {phase === "error" && <div className={styles.warning} role="alert"><p>{error}</p><button className={styles.secondary} onClick={reset}>Chọn ảnh khác</button></div>}
               </div>
               {phase === "ready" && analysis && <section className={styles.card}>
                 <div className={styles.cardHeading}><h2>Thông tin sự cố</h2><span className={styles.demoTag}>Cần xác nhận</span></div>
-                <p className={styles.warning}><AlertTriangle size={18} /><span>AI chưa được kết nối nên chưa thể nhận diện ảnh hoặc đánh giá mức độ. Bạn hãy kiểm tra các thông tin bên dưới.</span></p>
+                <p className={styles.warning}><AlertTriangle size={18} /><span>AI hiện chỉ hỗ trợ nhận diện ổ gà, không đánh giá mức nguy hiểm. Bạn có thể sửa loại sự cố bên dưới.</span></p>
                 <label className={styles.field}>Loại sự cố<select value={analysis.category} onChange={event => updateDetails(location, time, event.target.value)}>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
-                <div className={styles.detail}><Sparkles size={18} /><div><strong>Độ tin cậy AI: chưa có</strong><p>{analysis.reason}</p></div></div>
+                <RecognitionSummary recognition={analysis.recognition} category={analysis.category} />
+                <button className={styles.textButton} disabled={editingLocation || editingTime || Boolean(savedReport?.submission)} onClick={() => void analyze(location, time, generation.current, imageBlob, true)}>Thử nhận diện lại</button>
                 <div className={styles.detail}><MapPin size={18} /><div><strong>{locationLabel(location)}</strong><p>{location.type === "exif" ? "Vị trí lấy từ ảnh" : location.type === "gps" ? "Vị trí GPS thiết bị" : "Vị trí do bạn cung cấp"}</p><button className={styles.textButton} onClick={() => { setLocationInput(locationLabel(location)); setLatitudeInput(location.lat?.toString() ?? ""); setLongitudeInput(location.lng?.toString() ?? ""); setEditingLocation(true); }}>Bấm để sửa vị trí</button></div></div>
                 {editingLocation && locationEditor}
                 <div className={styles.detail}><Clock size={18} /><div><strong>{formatTime(time)}</strong><p>{source === "camera" ? "Thời điểm chụp ảnh" : timeFromExif ? "Thời gian lấy từ ảnh" : "Giờ của tệp ảnh; có thể khác giờ chụp"} · Giờ Việt Nam</p><button className={styles.textButton} onClick={() => { setTimeInput(vietnamTimeInput(time)); setEditingTime(true); }}>Bấm để sửa thời gian</button></div></div>
                 {editingTime && <form className={styles.editor} onSubmit={event => { event.preventDefault(); const value = new Date(`${timeInput}:00+07:00`); if (!Number.isFinite(value.getTime())) return; const nextTime = value.toISOString(); setTime(nextTime); updateDetails(location, nextTime); setEditingTime(false); }}><label htmlFor="capture-time">Thời gian chụp (giờ Việt Nam)</label><input id="capture-time" type="datetime-local" required value={timeInput} onChange={event => setTimeInput(event.target.value)} /><div className={styles.row}><button type="button" className={styles.textButton} onClick={() => setEditingTime(false)}>Hủy</button><button className={styles.primary}>Lưu thời gian</button></div></form>}
-                <button className={styles.primary} disabled={editingLocation || editingTime} onClick={() => setScreen("report")}>Tiếp tục soạn phản ánh <ArrowRight size={19} /></button>
+                <button className={styles.primary} disabled={editingLocation || editingTime} onClick={() => setScreen("report")}>Xác nhận loại sự cố & tiếp tục <ArrowRight size={19} /></button>
                 <button className={styles.secondary} onClick={reset}><RefreshCcw size={18} /> Chụp lại / chọn ảnh khác</button>
               </section>}
             </>
@@ -424,6 +439,7 @@ function CitizenHome() {
             <ReportConfirmation
               preview={preview}
               category={analysis.category}
+              recognition={analysis.recognition}
               locationLabel={locationLabel(location)}
               timeLabel={formatTime(time)}
               receivingDepartment={savedReport?.receivingDepartment}
