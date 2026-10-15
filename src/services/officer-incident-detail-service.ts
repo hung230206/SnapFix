@@ -1,0 +1,466 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
+import type {
+  ConfidenceLevel,
+  IncidentEvent,
+  IncidentEventType,
+  IncidentStatus,
+  LocationSource,
+  Observation,
+  ObservationEvidence,
+  ObservationSource,
+} from "@/domain/models";
+import type { IncidentStatusTone } from "@/domain/incident/status";
+import {
+  getIncidentStatusPresentation,
+  getPriorityPresentation,
+} from "@/domain/incident/status";
+import {
+  DemoAssetRepository,
+  DemoDepartmentRepository,
+  DemoIssueQuestionOptionRepository,
+  DemoIssueQuestionRepository,
+  DemoIssueTypeRepository,
+  DemoObservationEvidenceRepository,
+  DemoObservationRepository,
+  DemoUserRepository,
+} from "@/lib/repositories/DemoRepositories";
+import {
+  officerIncidentEventRepository,
+  officerIncidentRepository,
+  officerResolutionRepository,
+} from "@/lib/repositories/officer-demo-repositories";
+
+export type IncidentDetailMetadataItem = {
+  label: string;
+  value: string;
+};
+
+export type IncidentDetailTimelineItem = {
+  id: string;
+  label: string;
+  description?: string;
+  occurredAt: string;
+  tone: IncidentStatusTone;
+};
+
+export type OfficerIncidentAssignmentSummary = {
+  teamId: string;
+  teamName: string;
+  officerId?: string;
+  officerName?: string;
+  deadline?: string;
+  note?: string;
+  assignedAt: string;
+};
+
+export type OfficerIncidentProcessingSummary = {
+  startedAt: string;
+  note?: string;
+};
+
+export type OfficerIncidentResolutionSummary = {
+  resultText: string;
+  image: {
+    dataUrl: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    width: number;
+    height: number;
+  };
+  submittedAt: string;
+};
+
+export type OfficerIncidentCompletionSummary = {
+  confirmedAt: string;
+};
+
+export type OfficerIncidentDetail = {
+  id: string;
+  publicCode: string;
+  issueType: string;
+  title: string;
+  description?: string;
+  submittedAt: string;
+  capturedAt?: string;
+  imageUrl?: string;
+  status: {
+    code: IncidentStatus;
+    label: string;
+    tone: IncidentStatusTone;
+  };
+  priority: {
+    label: string;
+    tone: IncidentStatusTone;
+    score: number;
+    reasons: string[];
+  };
+  aiSupport: {
+    classification: string;
+    confidence: string;
+  };
+  location: {
+    address: string;
+    lat?: number;
+    lng?: number;
+    mapAvailable: boolean;
+    mapUnavailableReason?: string;
+  };
+  observationMetadata: IncidentDetailMetadataItem[];
+  supplementalAnswers: IncidentDetailMetadataItem[];
+  evidence?: {
+    confidence: string;
+    reasons: string[];
+    warnings: string[];
+  };
+  reportCount: number;
+  relatedReportCount: number;
+  assignment?: OfficerIncidentAssignmentSummary;
+  processing?: OfficerIncidentProcessingSummary;
+  resolution?: OfficerIncidentResolutionSummary;
+  completion?: OfficerIncidentCompletionSummary;
+  timeline: IncidentDetailTimelineItem[];
+};
+
+const incidentRepository = officerIncidentRepository;
+const issueTypeRepository = new DemoIssueTypeRepository();
+const observationRepository = new DemoObservationRepository();
+const observationEvidenceRepository = new DemoObservationEvidenceRepository();
+const assetRepository = new DemoAssetRepository();
+const eventRepository = officerIncidentEventRepository;
+const resolutionRepository = officerResolutionRepository;
+const departmentRepository = new DemoDepartmentRepository();
+const userRepository = new DemoUserRepository();
+const questionRepository = new DemoIssueQuestionRepository();
+const questionOptionRepository = new DemoIssueQuestionOptionRepository();
+
+const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
+  HIGH: "Cao",
+  MEDIUM: "Trung bình",
+  LOW: "Thấp",
+};
+
+const OBSERVATION_SOURCE_LABELS: Record<ObservationSource, string> = {
+  LIVE_CAMERA: "Chụp trực tiếp",
+  FILE_UPLOAD: "Ảnh tải lên",
+  OFFLINE_CAPTURE: "Chụp ngoại tuyến",
+};
+
+const LOCATION_SOURCE_LABELS: Record<LocationSource, string> = {
+  LIVE_DEVICE: "GPS thiết bị",
+  EXIF: "GPS từ ảnh",
+  MANUAL_PIN: "Ghim thủ công",
+  ADDRESS_GEOCODED: "Từ địa chỉ",
+};
+
+const EVENT_LABELS: Record<IncidentEventType, string> = {
+  CREATED: "Phản ánh được tạo",
+  OBSERVATION_ADDED: "Thêm lượt phản ánh liên quan",
+  VERIFIED: "Phản ánh được tiếp nhận",
+  ASSIGNED: "Phản ánh được phân công",
+  STATUS_CHANGED: "Trạng thái được cập nhật",
+  NOTE_ADDED: "Thêm ghi chú xử lý",
+  PRIORITY_CHANGED: "Mức độ ưu tiên được cập nhật",
+  RESOLUTION_UPLOADED: "Đã bổ sung kết quả xử lý",
+  COMMUNITY_CONFIRMED: "Kết quả được cộng đồng xác nhận",
+  CLOSED: "Phản ánh đã hoàn thành",
+};
+
+const CAN_THO_PROTOTYPE_BOUNDS = {
+  minLat: 9.85,
+  maxLat: 10.35,
+  minLng: 105.45,
+  maxLng: 106,
+};
+
+function resolvePublicAssetUrl(storagePath?: string): string | undefined {
+  if (!storagePath?.startsWith("/")) {
+    return undefined;
+  }
+
+  const publicDirectory = path.resolve(process.cwd(), "public");
+  const assetPath = path.resolve(publicDirectory, storagePath.replace(/^\/+/, ""));
+  const isInsidePublicDirectory = assetPath.startsWith(`${publicDirectory}${path.sep}`);
+
+  return isInsidePublicDirectory && existsSync(assetPath) ? storagePath : undefined;
+}
+
+function isWithinCanThoPrototypeArea(lat: number, lng: number): boolean {
+  return (
+    lat >= CAN_THO_PROTOTYPE_BOUNDS.minLat &&
+    lat <= CAN_THO_PROTOTYPE_BOUNDS.maxLat &&
+    lng >= CAN_THO_PROTOTYPE_BOUNDS.minLng &&
+    lng <= CAN_THO_PROTOTYPE_BOUNDS.maxLng
+  );
+}
+
+function safeParseStringArray(value?: string): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function safeParseAnswers(value?: string): Record<string, unknown> {
+  if (!value) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function formatAnswerValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).join(", ");
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Có" : "Không";
+  }
+
+  return String(value);
+}
+
+function buildObservationMetadata(
+  observation?: Observation,
+  evidence?: ObservationEvidence | null,
+): IncidentDetailMetadataItem[] {
+  if (!observation) return [];
+
+  const metadata: IncidentDetailMetadataItem[] = [
+    { label: "Nguồn ảnh", value: OBSERVATION_SOURCE_LABELS[observation.source] },
+    { label: "Nguồn vị trí", value: LOCATION_SOURCE_LABELS[observation.locationSource] },
+  ];
+
+  if (observation.accuracyMeters !== undefined) {
+    metadata.push({
+      label: "Độ chính xác GPS",
+      value: `±${Math.round(observation.accuracyMeters)} m`,
+    });
+  }
+
+  if (evidence) {
+    metadata.push(
+      { label: "EXIF", value: evidence.exifAvailable ? "Có" : "Không" },
+      { label: "EXIF GPS", value: evidence.exifGpsAvailable ? "Có" : "Không" },
+    );
+  }
+
+  if (observation.staleEvidence) {
+    metadata.push({ label: "Tình trạng bằng chứng", value: "Cần kiểm tra lại" });
+  }
+
+  return metadata;
+}
+
+function buildTimelineItem(event: IncidentEvent): IncidentDetailTimelineItem {
+  const status = event.newStatus
+    ? getIncidentStatusPresentation(event.newStatus)
+    : undefined;
+
+  return {
+    id: event.id,
+    label:
+      event.type === "STATUS_CHANGED" && status
+        ? `Cập nhật trạng thái: ${status.label}`
+        : event.type === "RESOLUTION_UPLOADED" && status
+          ? `Gửi kết quả: ${status.label}`
+          : event.type === "CLOSED" && status
+            ? `Xác nhận hoàn thành: ${status.label}`
+        : EVENT_LABELS[event.type],
+    description: event.note,
+    occurredAt: event.createdAt,
+    tone: status?.tone ?? (event.type === "CREATED" ? "success" : "neutral"),
+  };
+}
+
+export class OfficerIncidentDetailService {
+  async getIncidentDetail(id: string): Promise<OfficerIncidentDetail | null> {
+    const incident = await incidentRepository.findById(id);
+
+    if (!incident) {
+      return null;
+    }
+
+    const [issueType, observations, events, questions, resolution] = await Promise.all([
+      issueTypeRepository.findByCode(incident.issueTypeCode),
+      observationRepository.findByIncidentId(incident.id),
+      eventRepository.findByIncidentId(incident.id),
+      questionRepository.findByIssueTypeCode(incident.issueTypeCode),
+      resolutionRepository.findByIncidentId(incident.id),
+    ]);
+
+    const primaryObservation = [...observations].sort(
+      (first, second) =>
+        new Date(first.submittedAt).getTime() - new Date(second.submittedAt).getTime(),
+    )[0];
+    const latestAssignmentEvent = [...events]
+      .filter((event) => event.type === "ASSIGNED")
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      )[0];
+    const latestProcessingEvent = [...events]
+      .filter(
+        (event) =>
+          event.type === "STATUS_CHANGED" &&
+          event.oldStatus === "ASSIGNED" &&
+          event.newStatus === "IN_PROGRESS",
+      )
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      )[0];
+    const latestCompletionEvent = [...events]
+      .filter(
+        (event) =>
+          event.type === "CLOSED" &&
+          event.oldStatus === "RESOLVED" &&
+          event.newStatus === "CLOSED",
+      )
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      )[0];
+    const [assignedDepartment, assignedOfficer] = await Promise.all([
+      incident.assignedDepartmentId
+        ? departmentRepository.findById(incident.assignedDepartmentId)
+        : null,
+      incident.assignedOfficerId ? userRepository.findById(incident.assignedOfficerId) : null,
+    ]);
+    const primaryEvidence = primaryObservation?.evidenceId
+      ? await observationEvidenceRepository.findById(primaryObservation.evidenceId)
+      : null;
+    const assetId = primaryObservation?.publicImageAssetId ?? primaryObservation?.imageAssetId;
+    const asset = assetId ? await assetRepository.findById(assetId) : null;
+    const issueTypeLabel = issueType?.nameVi ?? incident.issueTypeCode;
+    const status = getIncidentStatusPresentation(incident.status);
+    const priority = getPriorityPresentation(incident.priorityLevel);
+    const answers = safeParseAnswers(primaryObservation?.answersJson);
+
+    const questionOptions = await Promise.all(
+      questions.map(async (question) => ({
+        question,
+        options: await questionOptionRepository.findByQuestionId(question.id),
+      })),
+    );
+    const supplementalAnswers = Object.entries(answers).map(([questionId, value]) => {
+      const questionData = questionOptions.find((item) => item.question.id === questionId);
+      const rawValue = formatAnswerValue(value);
+      const optionLabel = questionData?.options.find((option) => option.value === rawValue)?.labelVi;
+
+      return {
+        label: questionData?.question.labelVi ?? questionId,
+        value: optionLabel ?? rawValue,
+      };
+    });
+
+    const lat = incident.centroidLat;
+    const lng = incident.centroidLng;
+    const hasCoordinates = lat !== undefined && lng !== undefined;
+    const mapAvailable = hasCoordinates && isWithinCanThoPrototypeArea(lat, lng);
+
+    return {
+      id: incident.id,
+      publicCode: incident.publicCode,
+      issueType: issueTypeLabel,
+      title: primaryObservation?.title ?? issueTypeLabel,
+      description: primaryObservation?.description,
+      submittedAt: primaryObservation?.submittedAt ?? incident.createdAt,
+      capturedAt: primaryObservation?.capturedAt,
+      imageUrl: resolvePublicAssetUrl(asset?.storagePath),
+      status: { code: incident.status, ...status },
+      priority: {
+        ...priority,
+        score: incident.priorityScore,
+        reasons: incident.priorityReasons,
+      },
+      aiSupport: {
+        classification: issueTypeLabel,
+        confidence: CONFIDENCE_LABELS[incident.confidenceLevel],
+      },
+      location: {
+        address: primaryObservation?.locationText ?? "Chưa có địa chỉ/khu vực chi tiết",
+        lat,
+        lng,
+        mapAvailable,
+        mapUnavailableReason: !hasCoordinates
+          ? "Phản ánh chưa có tọa độ để hiển thị trên bản đồ."
+          : !mapAvailable
+            ? "Tọa độ dữ liệu mô phỏng chưa đồng bộ với khu vực Cần Thơ nên bản đồ không được hiển thị để tránh gây nhầm lẫn."
+            : undefined,
+      },
+      observationMetadata: buildObservationMetadata(primaryObservation, primaryEvidence),
+      supplementalAnswers,
+      evidence: primaryEvidence
+        ? {
+            confidence: CONFIDENCE_LABELS[primaryEvidence.evidenceConfidence],
+            reasons: safeParseStringArray(primaryEvidence.evidenceReasonsJson),
+            warnings: safeParseStringArray(primaryEvidence.evidenceWarningsJson),
+          }
+        : undefined,
+      reportCount: incident.independentReportCount,
+      relatedReportCount: Math.max(0, incident.independentReportCount - 1),
+      assignment: incident.assignedDepartmentId
+        ? {
+            teamId: incident.assignedDepartmentId,
+            teamName: assignedDepartment?.name ?? incident.assignedDepartmentId,
+            officerId: incident.assignedOfficerId,
+            officerName: assignedOfficer?.displayName,
+            deadline:
+              typeof latestAssignmentEvent?.metadata?.deadline === "string"
+                ? latestAssignmentEvent.metadata.deadline
+                : undefined,
+            note: latestAssignmentEvent?.note,
+            assignedAt: latestAssignmentEvent?.createdAt ?? incident.updatedAt,
+          }
+        : undefined,
+      processing: latestProcessingEvent
+        ? {
+            startedAt:
+              typeof latestProcessingEvent.metadata?.startedAt === "string"
+                ? latestProcessingEvent.metadata.startedAt
+                : latestProcessingEvent.createdAt,
+            note: latestProcessingEvent.note,
+          }
+        : undefined,
+      resolution: resolution
+        ? {
+            resultText: resolution.resultText,
+            image: resolution.image,
+            submittedAt: resolution.submittedAt,
+          }
+        : undefined,
+      completion:
+        latestCompletionEvent || incident.closedAt
+          ? {
+              confirmedAt:
+                typeof latestCompletionEvent?.metadata?.confirmedAt === "string"
+                  ? latestCompletionEvent.metadata.confirmedAt
+                  : (incident.closedAt ?? latestCompletionEvent?.createdAt ?? incident.updatedAt),
+            }
+          : undefined,
+      timeline: [...events]
+        .sort(
+          (first, second) =>
+            new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+        )
+        .map(buildTimelineItem),
+    };
+  }
+}
+
+export const officerIncidentDetailService = new OfficerIncidentDetailService();
